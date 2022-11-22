@@ -17,7 +17,7 @@ import pickle
 import numpy as np
 from pysteps import motion, nowcasts, verification
 import itertools
-import haic_utils_op as HU
+import utils as ut
 import plotting
 
 # Get environment variables
@@ -51,7 +51,7 @@ def main():
     # Get dates and times based on initial cycle time
     first_vdt = datetime.strptime(CYCLE_TIME, '%Y%m%dT%H%MZ')
     vdts = rrule(HOURLY, interval=6, count=1, dtstart=first_vdt)
-
+    print(vdts)
     # Pandas dataframe to add to
     ndf = pd.DataFrame({'LK': [], 'VET': [], 'DARTS': [], 'proesmans': [], 
                         'threshold': [], 'lead': [], 'scale': []})
@@ -163,7 +163,7 @@ def extract_satellite_data(vdt, sat_num, domain=False):
         if not os.path.isfile(p_sat_fname):
 
             # Load as cube and Regrid onto 2D
-            reg_cube = HU.haic_equi_image(r_sat_fname)
+            reg_cube = ut.haic_equi_image(r_sat_fname)
 
             # Intersect to local domain if required
             if domain:
@@ -555,3 +555,9 @@ def plot_ncasts(ncast_cube, f_str, new_plots=False, domain=False):
         # if new_plots or not os.path.exists(s_fname):
         #     plotting.plot(ncast, plot_title, s_fname, f_str, extents,
         #                   contours=True)
+
+
+if __name__ == "__main__":
+
+    # Run main script
+    main()
