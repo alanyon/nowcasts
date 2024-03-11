@@ -7,7 +7,9 @@ import iris.plot as iplt
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import numpy as np
+import cartopy
 import cartopy.crs as ccrs
+import seaborn as sns
 
 
 def get_x_y_ticks(lon_min, lon_max, lat_min, lat_max):
@@ -157,8 +159,6 @@ def plot(cube, plot_title, img_fname, h_type, extents, contours=False):
 
     # Draw gridlines
     try:
-        ax.gridlines(draw_labels=False, xlocs=xlocs, ylocs=ylocs,
-                     linewidth=0.5)
         grid = ax.gridlines(draw_labels=True, xlocs=xlabels, ylocs=ylocs,
                             linewidth=0.5)
         grid.xlabels_top = False
@@ -166,11 +166,15 @@ def plot(cube, plot_title, img_fname, h_type, extents, contours=False):
         grid = ax.gridlines(draw_labels=False, xlocs=xlabels, linewidth=0.5)
 
     # Draw coastlines and background stuff
-    ax.coastlines(linewidths=0.2)
-    ax.stock_img()
+    ax.add_feature(cartopy.feature.LAND)
+    ax.add_feature(cartopy.feature.OCEAN)
+    ax.add_feature(cartopy.feature.COASTLINE,linewidth=0.2)
+    ax.add_feature(cartopy.feature.BORDERS, linestyle=':',linewidth=0.3)
+    ax.add_feature(cartopy.feature.LAKES, alpha=0.5)
+    ax.add_feature(cartopy.feature.RIVERS)
 
     # Title of plot
-    plt.title(plot_title)
+    plt.title(plot_title, fontsize=25)
 
     # Plot a legend if contour plot (as long as there is some data in the cube)
     if contours:
@@ -183,14 +187,15 @@ def plot(cube, plot_title, img_fname, h_type, extents, contours=False):
         pcm.cmap.set_under(alpha=0)
         cbar_ax = fig.add_axes([0.126, -0.05, 0.773, 0.04])
         cbar = fig.colorbar(pcm, cax=cbar_ax, orientation="horizontal")
-        cbar.ax.set_title(title)
+        cbar.ax.set_title(title, fontsize=25)
+        cbar.ax.tick_params(labelsize=20)
 
     # Save plot
     plt.savefig(img_fname, dpi=100, bbox_inches='tight')
     plt.close()
 
 
-def verification_plot(scores, fname, f_str):
+def verification_plot(scores, fname, f_str, run_time):
 
     # Create figure and axes
     fig, axs = plt.subplots(2, 3, figsize=(18, 10))
@@ -205,20 +210,21 @@ def verification_plot(scores, fname, f_str):
         for thr, stats in thr_stats.items():
 
             # Only add to labels for one axis
-            if f_str == 'han':
-                label = f'{int(thr * 100)}%'
-            else:
-                label = str(thr)
             if ind == 0:
-                labels.append(label)
+                labels.append(thr)
 
             # Plot scores as line
-            ax.plot(stats['leads'], stats['scores'], 'o-', label=label)
+            ax.plot(stats['leads'], stats['scores'], 'o-')
 
         # Title, axes labels
         ax.set_title(f'Scale = {scale}')
         ax.set_xlabel('Lead time (minutes)')
         ax.set_ylabel('FSS')
+
+    # Add title
+    title = ('Fractions Skill Score Verification for Nowcast Run Time: '
+             f'{run_time}')
+    plt.suptitle(title, fontsize=25)
 
     # Put legend outside of figure
     fig.tight_layout()
@@ -227,6 +233,33 @@ def verification_plot(scores, fname, f_str):
                prop={'size': 18})
 
     # Save and close plot
+    fig.savefig(fname)
+    plt.close()
+
+
+def verification_wcssp(scores, fname, main_title):
+
+    # Create figure and axes
+    fig, axs = plt.subplots(2, 2, figsize=(20, 12))
+
+    # Make line plot for each threshold
+    for ax, thr in zip(axs.flat, [20, 40, 60, 80]):
+
+        # Get subset of scores for threshold
+        thr_scores = scores[scores['Threshold'] == thr]
+
+        # Make line plot
+        line_plot = sns.lineplot(data=thr_scores, x='Valid Time', 
+                                 y='FSS Score', hue='Forecast Type', ax=ax)
+        ax.set_title(f'\nThreshold = {thr}%', fontsize=15, fontweight='bold')
+        ax.xaxis.set_major_locator(plt.MaxNLocator(5))
+        line_plot.legend(loc='center left', bbox_to_anchor=(1.01, 0.9), ncol=1)
+
+    # Add main title to display model run used
+    plt.suptitle(main_title, fontweight='bold', fontsize=25)
+
+    # Save and close plot
+    plt.tight_layout()
     fig.savefig(fname)
     plt.close()
 
@@ -252,7 +285,7 @@ def verification_models_plot(scores, fname, f_str):
              # Title, axes labels (on first method iteration)
             if m_ind == 0:
                 if f_str == 'han':
-                    title = f'Threshold={int(thr * 100)}%'
+                    title = f'Threshold={thr}%'
                 else:
                     title = f'Threshold={thr}'
                 ax.set_title(title)

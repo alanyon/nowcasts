@@ -9,6 +9,7 @@ Author: Andre Lanyon
 Last updated: 11/1/1/2022
 """
 import os
+import sys
 from datetime import datetime, timedelta
 from dateutil.rrule import rrule, HOURLY
 import pandas as pd
@@ -28,44 +29,42 @@ STEPS = int(os.environ['STEPS'])
 CYCLE_TIME = os.environ['CYLC_TASK_CYCLE_POINT']
 
 # Dictionary containing HAIC/OT satellite info
-# SAT_DICT = {'han': [88, 'HAIC risk', [0.2, 0.4, 0.6, 0.8]], 
-#             'otn': [87, 'overshooting tops', [5, 10, 15, 20]]}
-SAT_DICT = {'han': [88, 'HAIC risk', [0.2, 0.4, 0.6, 0.8]]}
-# SAT_DICT = {'otn': [87, 'overshooting tops', [5, 10, 15, 20]]}
+SAT_NUM = 88
+TITLE = 'HAIC risk', 
+THRESHOLDS = [[0.2, 0.4, 0.6, 0.8], [20, 40, 60, 80]]
 
 # SE asia domain latitude/longitude extents and name
-LOC_EXTENTS = [90, 150, -10, 20]
-LOC_NAME = 'se_asia'
+LOC_EXTENTS = [67.52, 97.88, 5.56, 37.4]
+LOC_NAME = 'wcssp'
 # Nowcasting methods and indices to start from in satellite cubes
-METHODS = {'LK': -3, 'VET': -3, 'DARTS': -10, 'proesmans': -2}
+# METHODS = {'LK': -3, 'VET': -3, 'DARTS': -10, 'proesmans': -2}
+METHODS = {'LK': -3}
 # Scales to look over (in gridpoints)
 SCALES = [2, 4, 8, 16, 32, 64]
 # For pickling
 P_FNAME = f'{DATADIR}/ndf_pickle'
 
 
-def main():
+def main(new_data):
     """
     Extracts satellite data, then makes nowcasts.
     """
-    # Get dates and times based on initial cycle time
-    first_vdt = datetime.strptime(CYCLE_TIME, '%Y%m%dT%H%MZ')
-    vdts = rrule(HOURLY, interval=6, count=1, dtstart=first_vdt)
-    print(vdts)
-    # Pandas dataframe to add to
-    ndf = pd.DataFrame({'LK': [], 'VET': [], 'DARTS': [], 'proesmans': [], 
-                        'threshold': [], 'lead': [], 'scale': []})
+    # Only extract data if necessary
+    if new_data == 'yes':
 
-    # Loop through each dt
-    for vdt in vdts:
+        # Get dates and times based on initial cycle time
+        first_vdt = datetime.strptime(CYCLE_TIME, '%Y%m%dT%H%MZ')
+        vdts = rrule(HOURLY, interval=1, count=3, dtstart=first_vdt)
 
-        # Go through same process for HAIC and OT satellite files
-        for f_str in SAT_DICT:
+        # Pandas dataframe to add to
+        ndf = pd.DataFrame({'LK': [], 'VET': [], 'DARTS': [], 'proesmans': [], 
+                            'threshold': [], 'lead': [], 'scale': []})
+
+        # Loop through each dt
+        for vdt in vdts:
 
             # Extract satellite data
-            (sat_cube_now, 
-             sat_cube_verify) = extract_satellite_data(vdt, SAT_DICT[f_str][0],
-                                                       domain=True)
+            sat_cube_now, sat_cube_verify = extract_sat_data(vdt, domain=True)
 
             # Move to next iteration if satellite data no successfully extracted
             if not sat_cube_now:
@@ -73,10 +72,10 @@ def main():
                 continue
 
             # Plot satellite data
-            # plot_sats(sat_cube_now, f_str, domain=True)
-            # plot_sats(sat_cube_verify, f_str, domain=True)
+            plot_sats(sat_cube_now, f_str, domain=True)
+            plot_sats(sat_cube_verify, f_str, domain=True)
 
-            # # # Run nowcast using 4 different optical flow methods
+            # Run nowcast using 4 different optical flow methods
             ncast_cubes = {}
             for method, start_ind in METHODS.items():
 
@@ -91,36 +90,42 @@ def main():
                 print(f'Time taken for {method} method: {time_taken:.2f} seconds')
 
                 # Verify nowcasts against satellite imagery
-                # verify(sat_cube_verify, ncast_cube, f_str, fname=f'_{LOC_NAME}')
+                verify(sat_cube_verify, ncast_cube, f_str, fname=f'_{LOC_NAME}')
 
                 # Plot nowcasts and save iris cubes
-                # plot_ncasts(ncast_cube, f_str, domain=True)
+                plot_ncasts(ncast_cube, 'han', domain=True)
 
 
-            # # Make plots comparing nowcast methods
-            # fname_str = f'_{LOC_NAME}'
-            # verify_models(sat_cube_verify, ncast_cubes, f_str, fname=fname_str)
+            # Make plots comparing nowcast methods
+            fname_str = f'_{LOC_NAME}'
+            verify_models(sat_cube_verify, ncast_cubes, f_str, fname=fname_str)
 
             # Verify and add to dataframe
             fname_str = f'_{LOC_NAME}'
             ndf = verify_pd(ndf, sat_cube_verify, ncast_cubes, f_str, 
                             fname=fname_str)
 
-    # Pickle dataframe for later use
-    file_object = open(P_FNAME, 'wb')
-    pickle.dump(ndf, file_object)
-    file_object.close()
+    #     # Pickle dataframe for later use
+    #     file_object = open(P_FNAME, 'wb')
+    #     pickle.dump(ndf, file_object)
+    #     file_object.close()
+
+    # else:
+    #     with open(P_FNAME, 'rb') as file_object:
+    #         unpickle = pickle.Unpickler(file_object)
+    #         ndf = unpickle.load()
+
+    # print(ndf)
 
 
-def extract_satellite_data(vdt, sat_num, domain=False):
+
+def extract_sat_data(vdt, domain=False):
     """
     Extracts satellite files, regrids and processes to state to be used for
     nowcast
 
     :param vdt: valid date and time of most recent satellite data to use
     :type vdt: datetime.datetime
-    :param sat_num: Number for type of satellite data (HAIC or OT)
-    :type sat_num: int
     :param domain: indicates whether to use local domain, defaults to False 
     :type domain: bool, optional
 
@@ -146,7 +151,7 @@ def extract_satellite_data(vdt, sat_num, domain=False):
         sat_dt_str = sat_dt.strftime('%Y%m%d%H%M')
 
         # Define raw satellite file to extract
-        r_sat_fname = f'{SATDIR}/ETXY{sat_num}_{sat_dt_str}.nc'
+        r_sat_fname = f'{SATDIR}/ETXY{SAT_NUM}_{sat_dt_str}.nc'
 
         # Notify with print statement if satellite file not available
         if not os.path.exists(r_sat_fname):
@@ -157,13 +162,19 @@ def extract_satellite_data(vdt, sat_num, domain=False):
                 return False, False
 
         # Filename of processed satellite file to be sought/created
-        p_sat_fname = f'{DATADIR}/sat_data/{sat_num}_{sat_dt_str}{fname}.nc'
+        p_sat_fname = f'{DATADIR}/sat_data/{SAT_NUM}_{sat_dt_str}{fname}.nc'
 
         # Extract satellite data if not already saved
         if not os.path.isfile(p_sat_fname):
 
             # Load as cube and Regrid onto 2D
             reg_cube = ut.haic_equi_image(r_sat_fname)
+
+            if not reg_cube:
+                if step <= 0:
+                    return False, False
+                else:
+                    continue
 
             # Intersect to local domain if required
             if domain:
@@ -173,7 +184,10 @@ def extract_satellite_data(vdt, sat_num, domain=False):
                                                  latitude=lat_extent)
 
             # Delete attributes to enable merging
-            for attr in ['history', 'satellites_processed', 'Conventions']:
+            attrs = reg_cube.attributes.copy()
+            for attr in attrs:
+                if attr == 'Conventions':
+                    continue
                 del reg_cube.attributes[attr]
 
             # Set 'empty' gridpoints to 0
@@ -196,9 +210,16 @@ def extract_satellite_data(vdt, sat_num, domain=False):
         else:
             sat_cubes_verify.append(reg_cube)
 
-    # Merge into single cubes
-    sat_cube_now = sat_cubes_now.merge_cube()
-    sat_cube_verify = sat_cubes_verify.merge_cube()
+    if len(sat_cubes_now) == 0 or len(sat_cubes_verify) == 0:
+        print(f'Cannot make nowcast for {vdt} - empty cube')
+        return False, False
+
+    try:
+        sat_cube_now = sat_cubes_now.merge_cube()
+        sat_cube_verify = sat_cubes_verify.merge_cube()
+    except:
+        print('Could not merge cubes', vdt)
+        return False, False
 
     return sat_cube_now, sat_cube_verify
 
@@ -237,7 +258,7 @@ def plot_sats(sat_cube, f_str, new_plots=False, domain=False):
         date_plt = date.strftime('%H:%MZ on %d-%m-%Y')
 
         # Define plot title, and image and cube file names
-        plot_title = f'Satellite {SAT_DICT[f_str][1]} at {date_plt}'
+        plot_title = f'Satellite {TITLE} at {date_plt}'
         p_fname = f'{HTML_DIR}/{name}_py_{f_str[:2]}_sat_{date_str}.png'
         s_fname = f'{HTML_DIR}/{name}_py_{f_str[:2]}_sat_shapes_{date_str}.png'
 
@@ -292,6 +313,12 @@ def run_ncast(sat_cube, method, start_index):
                                     units='hours since epoch')
     ncasts.add_aux_coord(fr_coord)
 
+    # Save nowcast cube
+    t_0_vdt = sat_cube.coord('time').units.num2date(sat_time)
+    t_0_vdt_str = t_0_vdt.strftime('%Y%m%d%H%M')
+    fname = f'{DATADIR}/ncast_files/{SAT_NUM}_{t_0_vdt_str}.nc'
+    iris.save(ncasts, fname)
+
     return ncasts
 
 
@@ -312,9 +339,6 @@ def verify(sat_cube, ncast_cube, f_str, fname=''):
     """
     # Use fractions skill score method
     fss = verification.get_method('FSS')
-
-    # Define thresholds
-    thrs = SAT_DICT[f_str][2]
     
     # Get units from nowcast cube
     units = ncast_cube.coord('time').units
@@ -348,10 +372,10 @@ def verify(sat_cube, ncast_cube, f_str, fname=''):
             lead_time = int((valid_time - f_ref_time).total_seconds() / 60)
 
             # Calculate score for each scale value and add to scores dictionary
-            for thr in thrs:
-                score = fss(t_n_cube.data, t_s_cube.data, thr, scale)
-                all_scores[scale][thr]['leads'].append(lead_time)
-                all_scores[scale][thr]['scores'].append(score)
+            for thr_1, thr_2 in zip(THRESHOLDS):
+                score = fss(t_n_cube.data, t_s_cube.data, thr_1, scale)
+                all_scores[scale][thr_2]['leads'].append(lead_time)
+                all_scores[scale][thr_2]['scores'].append(score)
 
     # Make plot
     fname = f'{HTML_DIR}/verification_{f_str}{fname}.png'
@@ -375,9 +399,6 @@ def verify_models(sat_cube, ncasts, f_str, fname=''):
     """
     # Use fractions skill score method
     fss = verification.get_method('FSS')
-
-    # Define thresholds
-    thrs = SAT_DICT[f_str][2]
     
     # To add scores to
     all_scores = {}
@@ -389,7 +410,8 @@ def verify_models(sat_cube, ncasts, f_str, fname=''):
         units = ncast_cube.coord('time').units
 
         # Create dictionary for method in main dictionary
-        all_scores[method] = {thr: {'leads': [], 'scores': []} for thr in thrs}
+        all_scores[method] = {thr: {'leads': [], 'scores': []} 
+                              for thr in THRESHOLDS[1]}
 
         # Slices of cubes to loop over
         sat_slices = sat_cube.slices(['latitude', 'longitude'])
@@ -413,12 +435,12 @@ def verify_models(sat_cube, ncasts, f_str, fname=''):
             lead_time = int((valid_time - f_ref_time).total_seconds() / 60)
 
             # Calculate score for each threshold and add to scores dictionary
-            for thr in thrs:
+            for thr_1, thr_2 in zip(THRESHOLDS):
 
                 # Uses scale = 4
-                score = fss(t_n_cube.data, t_s_cube.data, thr, 4)
-                all_scores[method][thr]['leads'].append(lead_time)
-                all_scores[method][thr]['scores'].append(score)
+                score = fss(t_n_cube.data, t_s_cube.data, thr_1, 4)
+                all_scores[method][thr_2]['leads'].append(lead_time)
+                all_scores[method][thr_2]['scores'].append(score)
 
     # Make plot
     fname = f'{HTML_DIR}/verification_{f_str}{fname}_methods_scale_4.png'
@@ -430,9 +452,7 @@ def verify_pd(ndf, sat_cube, ncast_cubes, f_str, fname=''):
     # Use fractions skill score method
     fss = verification.get_method('FSS')
 
-    # Define thresholds
-    thrs = SAT_DICT[f_str][2]
-
+    # To add scores to
     scores = {}
 
     # Verify for all methods
@@ -463,13 +483,14 @@ def verify_pd(ndf, sat_cube, ncast_cubes, f_str, fname=''):
             lead_time = int((valid_time - f_ref_time).total_seconds() / 60)
 
             # Calculate score for each threshold and add to dataframe
-            for thr, scale in itertools.product(thrs, SCALES):
-                score = fss(t_n_cube.data, t_s_cube.data, thr, scale)
+            thrs_1, thrs_2 = THRESHOLDS
+            for (ind, thr_1), scale in itertools.product(enumerate(thrs_0), 
+                                                         SCALES):
+                thr_2 = thrs_2[ind]
+                score = fss(t_n_cube.data, t_s_cube.data, thr_1, scale)
 
                 # string containing lead, threshold and scale information
-                if f_str == 'han':
-                    thr = int(thr * 100)
-                lead_thresh_scale = f'{lead_time} {thr} {scale}'
+                lead_thresh_scale = f'{lead_time} {thr_2} {scale}'
 
                 # Add to dictionary
                 if lead_thresh_scale not in scores:
@@ -542,7 +563,7 @@ def plot_ncasts(ncast_cube, f_str, new_plots=False, domain=False):
         date_plt = valid_time.strftime('%H:%MZ on %d-%m-%Y')
 
         # Define titles/fnames
-        plot_title = (f'Nowcast {SAT_DICT[f_str][1]} at {date_plt}, '
+        plot_title = (f'Nowcast {TITLE} at {date_plt}, '
                       f'lead time: T+{lead_time}')
         p_fname = f'{HTML_DIR}/{name}_py_{f_str[:2]}_now_{vf_time_str}.png'
         s_fname = (f'{HTML_DIR}/{name}_py_{f_str[:2]}_now_shapes_'
@@ -559,5 +580,13 @@ def plot_ncasts(ncast_cube, f_str, new_plots=False, domain=False):
 
 if __name__ == "__main__":
 
+    # try:
+    new_data = sys.argv[1]
+    # except:
+    #     print('WARNING! Arguments not set correctly so will exit python '
+    #           'script')
+    #     exit()
+
+
     # Run main script
-    main()
+    main(new_data)

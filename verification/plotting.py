@@ -2,8 +2,11 @@
 Module containing plotting functions
 """
 from itertools import chain
+import os
+import pandas as pd
 import iris
 import iris.plot as iplt
+import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import numpy as np
@@ -185,88 +188,81 @@ def plot(cube, plot_title, img_fname, h_type, extents, contours=False):
         cbar = fig.colorbar(pcm, cax=cbar_ax, orientation="horizontal")
         cbar.ax.set_title(title)
 
+    print('here 3')
     # Save plot
     plt.savefig(img_fname, dpi=100, bbox_inches='tight')
     plt.close()
 
 
-def verification_plot(scores, fname, f_str):
+def sea_plots(ndf, rt_df, html_dir, vdts, fstr):
+    """
+    Creates seaborn verification plots.
+    """
+    # Make image directory if necessary
+    first, last = [vdt.strftime('%Y%m%d%H%m') for vdt in [vdts[0], vdts[-1]]]
+    img_dir = f'{html_dir}/verification_{first}-{last}'
+    if not os.path.exists(img_dir):
+        os.system(f'mkdir {img_dir}')
 
-    # Create figure and axes
-    fig, axs = plt.subplots(2, 3, figsize=(18, 10))
+    # Run time means
+    run_means = rt_df.groupby(['method']).mean()
+    run_medians = rt_df.groupby(['method']).median()
 
-    # Labels for legend
-    labels = []
+    print('means', run_means)
+    print('medians', run_medians)
 
-    # Make plot for each threshold
-    for ind, (ax, (scale, thr_stats)) in enumerate(zip(axs.flat, 
-                                                       scores.items())):
-        # Draw line plot for each lead time
-        for thr, stats in thr_stats.items():
+    # Run time histogram
+    sns.set_style('darkgrid')
+    runs = sns.histplot(data=rt_df, x='run time (seconds)', y='method', 
+                        hue='method', bins=100, legend=False)
+    runs.set_xlabel('Processing time (seconds)', fontsize=12)
 
-            # Only add to labels for one axis
-            if f_str == 'han':
-                label = f'{int(thr * 100)}%'
-            else:
-                label = str(thr)
-            if ind == 0:
-                labels.append(label)
-
-            # Plot scores as line
-            ax.plot(stats['leads'], stats['scores'], 'o-', label=label)
-
-        # Title, axes labels
-        ax.set_title(f'Scale = {scale}')
-        ax.set_xlabel('Lead time (minutes)')
-        ax.set_ylabel('FSS')
-
-    # Put legend outside of figure
-    fig.tight_layout()
-    fig.subplots_adjust(right=0.88)
-    fig.legend(labels, loc='center right', title='Threshold', 
-               prop={'size': 18})
+    # Add mean lines
+    colours = {'LK': 'b', 'VET': 'saddlebrown', 'DARTS': 'g', 'proesmans': 'r'}
+    for method, colour in colours.items():
+        runs.axvline(run_medians.loc[method].values, c=colour, ls='--', 
+                     alpha=0.4, lw=0.5)
 
     # Save and close plot
-    fig.savefig(fname)
+    plt.savefig(f'{img_dir}/{fstr}_run_times.png')
     plt.close()
 
+    # Calculate mean fss scores
+    fss_means = ndf.groupby(['method', 'lead', 'scale', 'threshold']).mean()
 
-def verification_models_plot(scores, fname, f_str):
-
-    # Create figure and axes
-    fig, axs = plt.subplots(2, 2, figsize=(12, 10))
-
-    # Labels for legend
-    labels = [method for method in scores]
-
-    # Plot for each method
-    for m_ind, (method, method_stats) in enumerate(scores.items()):
-
-        # Draw line plot for each lead time
-        for t_ind, (ax, (thr, stats)) in enumerate(zip(axs.flat, 
-                                                       method_stats.items())):
-
-            # Plot scores as line
-            ax.plot(stats['leads'], stats['scores'], 'o-', label=method)
-
-             # Title, axes labels (on first method iteration)
-            if m_ind == 0:
-                if f_str == 'han':
-                    title = f'Threshold={int(thr * 100)}%'
-                else:
-                    title = f'Threshold={thr}'
-                ax.set_title(title)
-                ax.set_xlabel('Lead time (minutes)')
-                ax.set_ylabel('FSS')
-
-    # Put legend outside of figure
-    fig.tight_layout()
-    fig.subplots_adjust(right=0.88)
-    fig.legend(labels, loc='center right', title='Method')
-
-    # Save and close plot
-    fig.savefig(fname)
+    # Line plot for each threshold, showing distribution over scales
+    with sns.plotting_context(rc={'legend.fontsize':15, 
+                                  'legend.title_fontsize':20}):
+        g = sns.relplot(data=fss_means, x='lead', y='fss', col='threshold', 
+                        hue='method', style='method', kind='line', col_wrap=2)
+    g.set_xlabels('lead time (minutes)', fontsize=20)
+    g.set_ylabels('FSS', fontsize=18)
+    g.set_titles(size=20)
+    plt.savefig(f'{img_dir}/{fstr}_threshold_means_all_scales.png')
     plt.close()
+
+    # Line plots for each threshold and each scale
+    for scale in ndf['scale'].unique():
+        fss_scale = ndf.loc[ndf['scale'] == scale]
+        scale_means = fss_scale.groupby(['method', 'lead', 'threshold']).mean()
+        sns.relplot(data=scale_means, x='lead', y='fss', col='threshold', 
+                    hue='method', style='method', kind='line', col_wrap=2)
+        plt.savefig(f'{img_dir}/{fstr}_threshold_means_scale_{scale}_plot.png')
+        plt.close()
+
+        # # Plot histograms
+        # for lead in ndf['lead'].unique():
+        #     fss_sl = fss_scale.loc[fss_scale['lead'] == lead]
+
+        #     fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+        #     for ax, thr in zip(axs.flat, ndf['threshold'].unique()):
+        #         fss_slt = fss_sl.loc[fss_sl['threshold'] == thr]
+        #         sns.histplot(data=fss_slt, x='fss', y='method', hue='method',
+        #                     bins=20, legend=False, ax=ax)
+        #         ax.set_title(f'Threshold={thr}')
+        #     fig.tight_layout()
+        #     fig.savefig(f'{img_dir}/{fstr}_hists_scale_{scale}_lead_{lead}.png')
+        #     plt.close()
 
 
 class MidpointNormalize(colors.Normalize):
