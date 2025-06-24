@@ -1,15 +1,21 @@
 """
 Module containing plotting functions
+
+Functions:
+    get_x_y_ticks: Returns x and y ticks and labels for a plot.
+    plot: Creates a plot using data from an iris cube and saves it.
+    verification_models_plot: Creates a verification for OF methods.
+    verification_plot: Creates a verification plot.
+    MidpointNormalize: Normalization class for diverging color scales.
 """
 from itertools import chain
-import iris
-import iris.plot as iplt
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
-import numpy as np
+
 import cartopy
 import cartopy.crs as ccrs
-import seaborn as sns
+import iris.plot as iplt
+from matplotlib import colors
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def get_x_y_ticks(lon_min, lon_max, lat_min, lat_max):
@@ -17,18 +23,15 @@ def get_x_y_ticks(lon_min, lon_max, lat_min, lat_max):
     Returns lists of axes ticks and labels. This is normally straightforward,
     but gets complicated if crossing the dateline.
 
-    :param lon_min: minimum longitude value to use for plotting
-    :type lon_min: float
-    :param lon_max: maximum longitude value to use for plotting
-    :type lon_max: float
-    :param lat_min: minimum latitude value to use for plotting
-    :type lat_min: float
-    :param lat_max: maximum latitude value to use for plotting
-    :type lat_max: float
-
-    :return: tuple containing x tick locations, labels to use with x ticks,
-             ytick locations
-    :rtype: list of ints, list of ints, list of ints
+    Args:
+        lon_min (float): minimum longitude value
+        lon_max (float): maximum longitude value
+        lat_min (float): minimum latitude value
+        lat_max (float): maximum latitude value
+    Returns:
+        xlocs (list): list of x tick locations
+        xlabels (list): list of x tick labels
+        ylocs (list): list of y tick locations
     """
     # Get central longitude value and distance in degrees from centre to
     # horizontal edge of desired plot.
@@ -57,20 +60,22 @@ def get_x_y_ticks(lon_min, lon_max, lat_min, lat_max):
     elif central_lon < -180 + x_extent:
         xlocs = chain(
             range((180 - x_extent) + (180 + central_lon), 180 + 5, x_step),
-            range(-180, (central_lon + x_extent + 5), x_step))
-    elif central_lon > 180 - x_extent:
+            range(-180, (central_lon + x_extent + 5), x_step)
+        )
+    else:
         xlocs = chain(
             range((180 - x_extent) - (180 - central_lon), 180 + 5, x_step),
-            range(-180, (-180 + x_extent) - (180 - central_lon - 5), x_step))
+            range(-180, (-180 + x_extent) - (180 - central_lon - 5), x_step)
+        )
 
     # Get lists of xlocs and xlabels
-    xlocs = [x for x in xlocs]
+    xlocs = list(xlocs)
     xlabels = [x for x in xlocs if x != -180]
 
     # ylocs more straightforward
     ylocs = np.arange(lat_min, lat_max + 10, x_step)
 
-    return xlocs, xlabels, ylocs
+    return xlabels, ylocs
 
 
 def plot(cube, plot_title, img_fname, h_type, extents, contours=False):
@@ -78,25 +83,25 @@ def plot(cube, plot_title, img_fname, h_type, extents, contours=False):
     Creates a plot using data from an iris cube. Saves image, and has an option
     to save the iris cube used in the plotting.
 
-    :param cube: iris cube contain plotting data
-    :type cube: iris.cube.Cube
-    :param plot_title: plot title
-    :type plot_title: str
-    :param img_fname: image file name
-    :type img_fname: str
-    :param contours: idicates if contour plot is required, defaults to False
-    :type contours: bool, optional
-    :param diffs: idicates if contour comparison is required, defaults to False
-    :type diffs: bool, optional
+    Args:
+        cube (iris.cube.Cube): Cube containing data to plot
+        plot_title (str): Title of the plot
+        img_fname (str): Filename to save the plot image
+        h_type (str): Type of plot
+        extents (tuple): Longitude and latitude extents
+        contours (bool): Whether to plot contours or a pcolormesh.
+                         Default is False (i.e. pcolormesh).
+    Returns:
+        None
     """
     # Set lats/lons for global nowcast
     lon_min, lon_max, lat_min, lat_max = extents
 
     # Get x ticks and labels (complicated if crossing dateline)
-    xlocs, xlabels, ylocs = get_x_y_ticks(lon_min, lon_max, lat_min, lat_max)
+    xlabels, ylocs = get_x_y_ticks(lon_min, lon_max, lat_min, lat_max)
 
     # Define title for legend/colorbar
-    if h_type == 'otn':
+    if h_type == 'ot':
         title = 'OTanv rating'
     else:
         title = 'HAIC probability (%)'
@@ -117,7 +122,7 @@ def plot(cube, plot_title, img_fname, h_type, extents, contours=False):
     # Plot data, with type of plot depending on key waord arguments
     if contours:
         try:
-            if h_type == 'otn':
+            if h_type == 'ot':
                 levels = (0.05, 15., 20., 300.)
             else:
                 levels = (0.10, 0.5, 0.8, 1.1)
@@ -142,13 +147,13 @@ def plot(cube, plot_title, img_fname, h_type, extents, contours=False):
                                       '#af0000'])
 
         # Convert probabilities to percentages if needed
-        if h_type != 'otn':
+        if h_type != 'ot':
             perc_cube = cube * 100
         else:
             perc_cube = cube
 
         # Make percentage of HAIC plot
-        if h_type == 'otn':
+        if h_type == 'ot':
             vmax = 25.
         else:
             vmax = 100.
@@ -176,7 +181,8 @@ def plot(cube, plot_title, img_fname, h_type, extents, contours=False):
     # Title of plot
     plt.title(plot_title, fontsize=25)
 
-    # Plot a legend if contour plot (as long as there is some data in the cube)
+    # Plot a legend if contour plot (as long as there is some data in
+    # the cube)
     if contours:
         artists, _ = cs.legend_elements()
         labels = ['L', 'M', 'H']
@@ -195,89 +201,22 @@ def plot(cube, plot_title, img_fname, h_type, extents, contours=False):
     plt.close()
 
 
-def verification_plot(scores, fname, f_str, run_time):
-
-    # Create figure and axes
-    fig, axs = plt.subplots(2, 3, figsize=(18, 10))
-
-    # Labels for legend
-    labels = []
-
-    # Make plot for each threshold
-    for ind, (ax, (scale, thr_stats)) in enumerate(zip(axs.flat, 
-                                                       scores.items())):
-        # Draw line plot for each lead time
-        for thr, stats in thr_stats.items():
-
-            # Only add to labels for one axis
-            if ind == 0:
-                labels.append(thr)
-
-            # Plot scores as line
-            ax.plot(stats['leads'], stats['scores'], 'o-')
-
-        # Title, axes labels
-        ax.set_title(f'Scale = {scale}')
-        ax.set_xlabel('Lead time (minutes)')
-        ax.set_ylabel('FSS')
-
-    # Add title
-    title = ('Fractions Skill Score Verification for Nowcast Run Time: '
-             f'{run_time}')
-    plt.suptitle(title, fontsize=25)
-
-    # Put legend outside of figure
-    fig.tight_layout()
-    fig.subplots_adjust(right=0.88)
-    fig.legend(labels, loc='center right', title='Threshold', 
-               prop={'size': 18})
-
-    # Save and close plot
-    fig.savefig(fname)
-    plt.close()
-
-
-def verification_wcssp(scores, fname, main_title):
-
-    # Create figure and axes
-    fig, axs = plt.subplots(2, 2, figsize=(20, 12))
-
-    # Make line plot for each threshold
-    for ax, thr in zip(axs.flat, [20, 40, 60, 80]):
-
-        # Get subset of scores for threshold
-        thr_scores = scores[scores['Threshold'] == thr]
-
-        # Make line plot
-        line_plot = sns.lineplot(data=thr_scores, x='Valid Time', 
-                                 y='FSS Score', hue='Forecast Type', ax=ax)
-        ax.set_title(f'\nThreshold = {thr}%', fontsize=15, fontweight='bold')
-        ax.xaxis.set_major_locator(plt.MaxNLocator(5))
-        line_plot.legend(loc='center left', bbox_to_anchor=(1.01, 0.9), ncol=1)
-
-    # Add main title to display model run used
-    plt.suptitle(main_title, fontweight='bold', fontsize=25)
-
-    # Save and close plot
-    plt.tight_layout()
-    fig.savefig(fname)
-    plt.close()
-
-
 def verification_models_plot(scores, fname, f_str):
-
+    """
+    Creates a Fractions Skill Score (FSS) verification plot for
+    different thresholds and scales, comparing optical flow methods.
+    """
     # Create figure and axes
     fig, axs = plt.subplots(2, 2, figsize=(12, 10))
 
     # Labels for legend
-    labels = [method for method in scores]
+    labels = list(scores)
 
     # Plot for each method
     for m_ind, (method, method_stats) in enumerate(scores.items()):
 
         # Draw line plot for each lead time
-        for t_ind, (ax, (thr, stats)) in enumerate(zip(axs.flat, 
-                                                       method_stats.items())):
+        for ax, (thr, stats) in zip(axs.flat, method_stats.items()):
 
             # Plot scores as line
             ax.plot(stats['leads'], stats['scores'], 'o-', label=method)
@@ -302,13 +241,92 @@ def verification_models_plot(scores, fname, f_str):
     plt.close()
 
 
+def verification_plot(scores, fname, run_time):
+    """
+    Creates a Fractions Skill Score (FSS) verification plot for
+    different thresholds and scales.
+
+    Args:
+        scores (dict): Dictionary containing FSS scores
+        fname (str): Filename to save the plot image
+        run_time (str): Run time of the nowcast model
+    Returns:
+        None
+    """
+    # Create figure and axes
+    fig, axs = plt.subplots(2, 3, figsize=(18, 10))
+
+    # Labels for legend
+    labels = []
+
+    # Make plot for each threshold
+    for ind, (ax, (scale, thr_stats)) in enumerate(zip(axs.flat,
+                                                       scores.items())):
+        # Draw line plot for each lead time
+        for thr, stats in thr_stats.items():
+
+            # Only add to labels for one axis
+            if ind == 0:
+                labels.append(thr)
+
+            # Plot scores as line
+            ax.plot(stats['leads'], stats['scores'], 'o-')
+
+        # Title, axes labels
+        ax.set_title(f'Scale = {scale}')
+        ax.set_xlabel('Lead time (minutes)')
+        ax.set_ylabel('FSS')
+
+    # Add title
+    title = ('Fractions Skill Score Verification for Nowcast Run Time: '
+             f'{run_time}')
+    plt.suptitle(title, fontsize=25)
+
+    # Put legend outside of figure
+    fig.tight_layout()
+    fig.subplots_adjust(right=0.88)
+    fig.legend(labels, loc='center right', title='Threshold',
+               prop={'size': 18})
+
+    # Save and close plot
+    fig.savefig(fname)
+    plt.close()
+
+
 class MidpointNormalize(colors.Normalize):
+    """
+    Normalize a color scale so that diverging colors are centered around
+    a midpoint value. This is useful for visualizing data that has a
+    natural midpoint, such as anomalies or differences from a baseline.
+    """
     def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
+        """
+        Initialize the MidpointNormalize with a minimum, maximum, and
+        midpoint value.
+
+        Args:
+            vmin (float): Minimum value for normalization
+            vmax (float): Maximum value for normalization
+            midpoint (float): Midpoint value for normalization
+            clip (bool): Whether to clip values outside the range
+                         [vmin, vmax]
+        Returns:
+            None
+        """
         self.midpoint = midpoint
         colors.Normalize.__init__(self, vmin, vmax, clip)
 
     def __call__(self, value, clip=None):
-        # Ignoring masked values and all kinds of edge cases to make a simple
-        # example...
+        """
+        Normalize the value based on the midpoint.
+
+        Args:
+            value (array-like): Values to normalize
+            clip (bool): Whether to clip values outside the range
+                         [vmin, vmax]
+        Returns:
+            np.ma.masked_array: Normalized values, masked where
+                                necessary
+        """
         x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
         return np.ma.masked_array(np.interp(value, x, y))
