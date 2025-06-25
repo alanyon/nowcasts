@@ -52,8 +52,11 @@ def main():
                           f'/ETXY{SAT_NUM}_{sat_dt_str}.nc')
 
             # Extract from MASS
-            os.system(f'moo get {mass_fname} {r_fname}')
- 
+            try:
+                os.system(f'moo get {mass_fname} {r_fname}')                    
+            except Exception as e:
+                print(f'Error extracting {mass_fname}: {e}')
+
 
 if __name__ == "__main__":
     main()
