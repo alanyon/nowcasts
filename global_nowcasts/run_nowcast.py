@@ -19,22 +19,19 @@ import itertools
 import os
 from datetime import datetime, timedelta
 
+import pandas as pd
 import iris
 import numpy as np
 import plotting
 import utils as ut
-from dateutil.rrule import HOURLY, rrule
 from pysteps import motion, nowcasts, verification
 
 # Get environment variables
 HTML_DIR = os.environ['HTML_DIR']
 SATDIR = os.environ['SATDIR']
 DATADIR = os.environ['DATADIR']
-MASSDIR = os.environ['MASSDIR']
 STEPS = int(os.environ['STEPS'])
-START_TIME = os.environ['START_TIME']
-INTERVAL = int(os.environ['INTERVAL'])
-NUM_VDTS = int(os.environ['NUM_VDTS'])
+VDT_STR = os.environ['VDT_STR']
 
 # Dictionary containing HAIC/OT satellite info
 SAT_NUM = 88
@@ -61,47 +58,43 @@ def main():
     Returns:
         None
     """
-    # Get dates and times based on initial cycle time
-    first_vdt = datetime.strptime(START_TIME, '%Y%m%dT%H%M')
-    vdts = rrule(HOURLY, interval=INTERVAL, count=NUM_VDTS, dtstart=first_vdt)
+    # Extract satellite data
+    sat_cube_now, sat_cube_verify = extract_sat_data()
 
-    # Loop through each dt
-    for vdt in vdts:
+    # Move to next iteration if satellite data not extracted
+    if not sat_cube_now:
+        print('Insufficient satellite data for nowcast')
+        exit()
 
-        # Extract satellite data
-        sat_cube_now, sat_cube_verify = extract_sat_data(vdt)
+    # Plot satellite data
+    plot_sats(sat_cube_now)
+    plot_sats(sat_cube_verify)
 
-        # Move to next iteration if satellite data not extracted
-        if not sat_cube_now:
-            print('Insufficient satellite data for nowcast')
-            continue
+    # Run nowcast using Lukas-Kanade optical flow methods
+    ncast_cube = run_ncast(sat_cube_now)
 
-        # # Plot satellite data
-        # plot_sats(sat_cube_now)
-        # plot_sats(sat_cube_verify)
+    # Verify nowcasts against satellite imagery
+    verify_plot(sat_cube_verify, ncast_cube)
 
-        # Run nowcast using Lukas-Kanade optical flow methods
-        ncast_cube = run_ncast(sat_cube_now)
-
-        # Verify nowcasts against satellite imagery
-        verify_plot(sat_cube_verify, ncast_cube)
-
-        # # Plot nowcasts and save iris cubes
-        # plot_ncasts(ncast_cube)
+    # # Plot nowcasts and save iris cubes
+    plot_ncasts(ncast_cube)
 
 
-def extract_sat_data(vdt):
+def extract_sat_data():
     """
     Extracts satellite files, regrids and processes to state to be used
     for nowcast.
 
     Args:
-        vdt (datetime): valid date time to extract satellite data for
+        None
     Returns:
         sat_cube_now (iris.cube.Cube): Cube with sat data for nowcast
         sat_cube_verify (iris.cube.Cube): Cube with sat data for
                                           verification
     """
+    # Convert valid time to datetime object
+    vdt = datetime.strptime(VDT_STR, '%Y%m%dT%H%M')
+
     # Cubelists to add cubes to
     sat_cubes_now = iris.cube.CubeList([])
     sat_cubes_verify = iris.cube.CubeList([])
@@ -112,7 +105,6 @@ def extract_sat_data(vdt):
 
         # Get date of satellite file to use
         sat_dt = vdt + timedelta(minutes=30*step)
-        sat_date_str = sat_dt.strftime('%Y%m%d')
         sat_dt_str = sat_dt.strftime('%Y%m%d%H%M')
 
         # Define raw satellite file to extract
@@ -121,16 +113,14 @@ def extract_sat_data(vdt):
         # Extract from MASS if necessary
         if not os.path.exists(r_fname):
 
-            # Get MASS file name
-            mass_fname = (f'{MASSDIR}/{sat_date_str}'
-                          f'/ETXY{SAT_NUM}_{sat_dt_str}.nc')
-
-            # Extract from MASS
-            os.system(f'moo get {mass_fname} {r_fname}')
-
             # Can't create nowcast without 3 sat files
-            if not os.path.exists(r_fname) and step <= 0:
+            if step <= 0:
+                print(f'No satellite data for {vdt} - cannot create nowcast')
                 return False, False
+            
+            # Otherwise, move to next iteration
+            else:
+                continue
 
         # Filename of processed satellite file to be sought/created
         p_fname = f'{DATADIR}/sat_data/{SAT_NUM}_{sat_dt_str}_{LOC_NAME}.nc'
@@ -159,10 +149,12 @@ def extract_sat_data(vdt):
         else:
             sat_cubes_verify.append(reg_cube)
 
+    # Return False if no cubes to create nowcast or verify
     if len(sat_cubes_now) == 0 or len(sat_cubes_verify) == 0:
         print(f'Cannot make nowcast for {vdt} - empty cube')
         return False, False
 
+    # Merge cubes to create single cube for nowcast and verification
     try:
         sat_cube_now = sat_cubes_now.merge_cube()
         sat_cube_verify = sat_cubes_verify.merge_cube()
@@ -365,9 +357,7 @@ def verify_plot(sat_cube, ncast_cube):
 
     # To collect verification scores in (use percentage in labels for
     # HAIC)
-    all_scores = {scale: {thr: {'leads': [], 'scores': []}
-                          for thr in THRESHOLDS[1]}
-                  for scale in SCALES}
+    scores = {'Lead': [], 'Threshold': [], 'Scale': [], 'FSS': []}
 
     # Slices of cubes to loop over
     sat_slices = sat_cube.slices(['latitude', 'longitude'])
@@ -383,10 +373,9 @@ def verify_plot(sat_cube, ncast_cube):
         # Move to next iteration if times do not match
         if sat_time != now_time:
             continue
-
+        
         # Loop through each threshold
         for scale in SCALES:
-
             # Get lead time from nowcast cube
             f_ref_time_greg = ncast_cube.coord('forecast_reference_time')
             f_ref_time = units.num2date(f_ref_time_greg.points[0])
@@ -397,12 +386,16 @@ def verify_plot(sat_cube, ncast_cube):
             # dictionary
             for thr_1, thr_2 in zip(*THRESHOLDS):
                 score = fss(t_n_cube.data, t_s_cube.data, thr_1, scale)
-                all_scores[scale][thr_2]['leads'].append(lead_time)
-                all_scores[scale][thr_2]['scores'].append(score)
+                scores['Lead'].append(lead_time)
+                scores['Threshold'].append(thr_2)
+                scores['Scale'].append(scale)
+                scores['FSS'].append(score)
 
-    # Make plot
-    fname = f'{HTML_DIR}/verification_{N_TYPE}_{LOC_NAME}.png'
-    plotting.verification_plot(all_scores, fname, f_ref_time)
+    # Save scores to CSV file
+    scores_df = pd.DataFrame(scores)
+    scores_fname = (f'{DATADIR}/verification/{SAT_NUM}_'
+                    f'{f_ref_time.strftime("%Y%m%d%H%M")}_scores.csv')
+    scores_df.to_csv(scores_fname, index=False)
 
 
 if __name__ == "__main__":

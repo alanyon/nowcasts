@@ -12,16 +12,15 @@ export SATDIR=/data/scratch/andre.lanyon/HAIC/sat_files
 export DATADIR=/data/users/andre.lanyon/nowcasts
 export MASSDIR=moose:/adhoc/projects/autosatarchive/adhoc/mtg_global_composites
 export ENSDIR=/scratch/alanyon/HAIC/ens_files
-export STEPS=6
+export STEPS=24
 export TIMESTEP=30
-export INTERVAL=1
-export NUM_VDTS=3
-export START_TIME=20250623T0000
-export END_TIME=20250623T0100
+export VDT_STR=20250623T2200
 
 # Load scitools
 module load scitools
 
 # cd in code directory and run code
 cd ${CODE_DIR}
-python run_nowcast.py
+# python extract_from_mass.py
+# python run_nowcast.py
+python delete_old_files.py
