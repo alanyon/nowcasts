@@ -68,7 +68,11 @@ def get_haic_cube(filename):
     :rtype: iris.cube.Cube
     """
     # Load cube
-    cube = iris.load_cube(filename)
+    try:
+        cube = iris.load_cube(filename)
+    except:
+        print(f'Error loading {filename}.')
+        return None
 
     # We have to specify the coord system of the auxiliary coords
     crs = GeogCS(semi_major_axis=SEMIMAJOR_AXIS,
@@ -105,6 +109,10 @@ def haic_equi_image(filename):
     """
     # Get HAIC dataset as iris cube
     haic_cube = get_haic_cube(filename)
+
+    # Return if no cube was loaded
+    if haic_cube is None:
+        return None
 
     # Regrid to 2D
     haic_plot_cube = regrid_haic_cube_to_2d(haic_cube, empty_equi_cube(0.05))
