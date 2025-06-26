@@ -138,9 +138,8 @@ def extract_sat_data():
             # Filter cube to only include relevant data
             reg_cube = filter_cube(reg_cube, p_fname)
 
-        # Otherwise, load regridded data and append to list
-        else:
-            reg_cube = iris.load_cube(p_fname)
+        # Load regridded data and append to list
+        reg_cube = iris.load_cube(p_fname)
 
         # Append to appropriate cubelist
         if step <= 0:
@@ -154,12 +153,12 @@ def extract_sat_data():
         return False, False
 
     # Merge cubes to create single cube for nowcast and verification
-    # try:
-    sat_cube_now = sat_cubes_now.merge_cube()
-    sat_cube_verify = sat_cubes_verify.merge_cube()
-    # except:
-    #     print('Could not merge cubes', vdt)
-    #     return False, False
+    try:
+        sat_cube_now = sat_cubes_now.merge_cube()
+        sat_cube_verify = sat_cubes_verify.merge_cube()
+    except:
+        print('Could not merge cubes', vdt)
+        return False, False
 
     return sat_cube_now, sat_cube_verify
 
