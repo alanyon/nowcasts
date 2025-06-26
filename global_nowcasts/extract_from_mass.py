@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 MASSDIR = os.environ['MASSDIR']
 STEPS = int(os.environ['STEPS'])
 VDT_STR = os.environ['VDT_STR']
-SATDIR = os.environ['SATDIR']
+SCRATCH_DIR = os.environ['SCRATCH_DIR']
 SAT_NUM = 88
 
 
@@ -42,7 +42,7 @@ def main():
         sat_dt_str = sat_dt.strftime('%Y%m%d%H%M')
 
         # Define raw satellite file to extract
-        r_fname = f'{SATDIR}/ETXY{SAT_NUM}_{sat_dt_str}.nc'
+        r_fname = f'{SCRATCH_DIR}/sat_files/ETXY{SAT_NUM}_{sat_dt_str}.nc'
 
         # Extract from MASS if necessary
         if not os.path.exists(r_fname):
