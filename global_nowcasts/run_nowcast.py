@@ -28,8 +28,7 @@ from pysteps import motion, nowcasts, verification
 
 # Get environment variables
 HTML_DIR = os.environ['HTML_DIR']
-SATDIR = os.environ['SATDIR']
-DATADIR = os.environ['DATADIR']
+SCRATCH_DIR = os.environ['SCRATCH_DIR']
 STEPS = int(os.environ['STEPS'])
 VDT_STR = os.environ['VDT_STR']
 
@@ -108,7 +107,7 @@ def extract_sat_data():
         sat_dt_str = sat_dt.strftime('%Y%m%d%H%M')
 
         # Define raw satellite file to extract
-        r_fname = f'{SATDIR}/ETXY{SAT_NUM}_{sat_dt_str}.nc'
+        r_fname = f'{SCRATCH_DIR}/sat_files/ETXY{SAT_NUM}_{sat_dt_str}.nc'
 
         # Extract from MASS if necessary
         if not os.path.exists(r_fname):
@@ -123,7 +122,8 @@ def extract_sat_data():
                 continue
 
         # Filename of processed satellite file to be sought/created
-        p_fname = f'{DATADIR}/sat_data/{SAT_NUM}_{sat_dt_str}_{LOC_NAME}.nc'
+        p_fname = (f'{SCRATCH_DIR}/sat_data/{SAT_NUM}_{sat_dt_str}_'
+                   f'{LOC_NAME}.nc')
 
         # Extract satellite data if not already saved
         if not os.path.isfile(p_fname):
@@ -333,7 +333,7 @@ def run_ncast(sat_cube):
     # Save nowcast cube
     t_0_vdt = time_units.num2date(sat_time)
     t_0_vdt_str = t_0_vdt.strftime('%Y%m%d%H%M')
-    fname = f'{DATADIR}/ncast_files/{SAT_NUM}_{t_0_vdt_str}.nc'
+    fname = f'{SCRATCH_DIR}/ncast_files/{SAT_NUM}_{t_0_vdt_str}.nc'
     iris.save(ncasts, fname)
 
     return ncasts
@@ -393,7 +393,7 @@ def verify_plot(sat_cube, ncast_cube):
 
     # Save scores to CSV file
     scores_df = pd.DataFrame(scores)
-    scores_fname = (f'{DATADIR}/verification/{SAT_NUM}_'
+    scores_fname = (f'{SCRATCH_DIR}/verification/{SAT_NUM}_'
                     f'{f_ref_time.strftime("%Y%m%d%H%M")}_scores.csv')
     scores_df.to_csv(scores_fname, index=False)
 
