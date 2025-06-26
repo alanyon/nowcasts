@@ -33,23 +33,18 @@ def main():
     threshold_date = vdt - timedelta(days=1)
 
     # Loop through files in three data directories
-    for d_dir in ['sat_files', 'ncast_files', 'sat_data']:
+    for d_dir in ['sat_files', 'sat_data']:
 
         for fname in os.listdir(f'{SCRATCH_DIR}/{d_dir}'):
 
             # Define directory path
             dir_path = os.path.join(SCRATCH_DIR, d_dir)
 
-            # Check if directory exists
-            if not os.path.exists(dir_path):
-                print(f'Directory {dir_path} does not exist.')
-                continue
-
             # Loop through files in the directory
             for fname in os.listdir(dir_path):
 
                 # Check if file is older than threshold date
-                file_date = datetime.strptime(fname, '%Y%m%d%H%M.nc')
+                file_date = datetime.strptime(fname, 'ETXY88_%Y%m%d%H%M.nc')
                 if file_date < threshold_date:
 
                     # Delete old file

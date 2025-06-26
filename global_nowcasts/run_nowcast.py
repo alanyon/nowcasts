@@ -122,8 +122,7 @@ def extract_sat_data():
                 continue
 
         # Filename of processed satellite file to be sought/created
-        p_fname = (f'{SCRATCH_DIR}/sat_data/{SAT_NUM}_{sat_dt_str}_'
-                   f'{LOC_NAME}.nc')
+        p_fname = f'{SCRATCH_DIR}/sat_data/ETXY{SAT_NUM}_{sat_dt_str}.nc'
 
         # Extract satellite data if not already saved
         if not os.path.isfile(p_fname):
@@ -155,12 +154,12 @@ def extract_sat_data():
         return False, False
 
     # Merge cubes to create single cube for nowcast and verification
-    try:
-        sat_cube_now = sat_cubes_now.merge_cube()
-        sat_cube_verify = sat_cubes_verify.merge_cube()
-    except:
-        print('Could not merge cubes', vdt)
-        return False, False
+    # try:
+    sat_cube_now = sat_cubes_now.merge_cube()
+    sat_cube_verify = sat_cubes_verify.merge_cube()
+    # except:
+    #     print('Could not merge cubes', vdt)
+    #     return False, False
 
     return sat_cube_now, sat_cube_verify
 
@@ -333,8 +332,6 @@ def run_ncast(sat_cube):
     # Save nowcast cube
     t_0_vdt = time_units.num2date(sat_time)
     t_0_vdt_str = t_0_vdt.strftime('%Y%m%d%H%M')
-    fname = f'{SCRATCH_DIR}/ncast_files/{SAT_NUM}_{t_0_vdt_str}.nc'
-    iris.save(ncasts, fname)
 
     return ncasts
 
