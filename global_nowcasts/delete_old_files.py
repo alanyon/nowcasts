@@ -43,8 +43,11 @@ def main():
             # Loop through files in the directory
             for fname in os.listdir(dir_path):
 
+                # Get date string from file name
+                dt_str = fname.split('_')[-1]
+                
                 # Check if file is older than threshold date
-                file_date = datetime.strptime(fname, 'ETXY88_%Y%m%d%H%M.nc')
+                file_date = datetime.strptime(dt_str, '%Y%m%d%H%M.nc')
                 if file_date < threshold_date:
 
                     # Delete old file

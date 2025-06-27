@@ -13,7 +13,7 @@ Functions:
     plot_ncasts: Plots nowcast data and saves iris cubes.
     plot_sats: Plots satellite data.
     run_ncast: Creates nowcasts from satellite data.
-    verify_plot: Verifies nowcast probs against satellite probs.
+    verify_csv: Verifies nowcast probs against satellite probs.
 """
 import itertools
 import os
@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 import iris
+import copy
 import numpy as np
 import plotting
 import utils as ut
@@ -37,8 +38,9 @@ SAT_NUM = 88
 N_TYPE = 'haic'
 TITLE = 'HAIC risk'
 # SE asia domain latitude/longitude extents and name
-LOC_EXTENTS = [90, 150, -10, 20]
-LOC_NAME = 'se_asia'
+LOC_EXTENTS = [[90, 130, -10, 10], [0, 40, -10, 10], [-10, 30, 40, 60],
+               [-80, -40, -10, 10]]
+LOC_NAMES = ['se_asia', 'africa', 'europe', 'south_america']
 # Scales and thresholds to look over for verification
 SCALES = [2, 4, 8, 16, 32, 64]
 THRESHOLDS = [[0.2, 0.4, 0.6, 0.8], [20, 40, 60, 80]]
@@ -58,25 +60,28 @@ def main():
         None
     """
     # Extract satellite data
-    sat_cube_now, sat_cube_verify = extract_sat_data()
+    sat_cubes_now, sat_cubes_verify = extract_sat_data()
 
-    # Move to next iteration if satellite data not extracted
-    if not sat_cube_now:
-        print('Insufficient satellite data for nowcast')
-        exit()
+    # Loop through locations
+    for loc, loc_extent in zip(LOC_NAMES, LOC_EXTENTS):
 
-    # Plot satellite data
-    plot_sats(sat_cube_now)
-    plot_sats(sat_cube_verify)
+        # Move to next iteration if satellite data not extracted
+        if not sat_cubes_now[loc]:
+            print('Insufficient satellite data for nowcast')
+            exit()
 
-    # Run nowcast using Lukas-Kanade optical flow methods
-    ncast_cube = run_ncast(sat_cube_now)
+        # # Plot satellite data
+        # plot_sats(sat_cubes_now, loc, loc_extent)
+        # plot_sats(sat_cubes_verify, loc, loc_extent)
 
-    # Verify nowcasts against satellite imagery
-    verify_plot(sat_cube_verify, ncast_cube)
+        # Run nowcast using Lukas-Kanade optical flow methods
+        ncast_cube = run_ncast(sat_cubes_now[loc])
 
-    # # Plot nowcasts and save iris cubes
-    plot_ncasts(ncast_cube)
+        # Verify nowcasts against satellite imagery
+        verify_csv(sat_cubes_verify, loc, ncast_cube)
+
+        # # Plot nowcasts and save iris cubes
+        # plot_ncasts(ncast_cube, loc, loc_extent)
 
 
 def extract_sat_data():
@@ -95,8 +100,8 @@ def extract_sat_data():
     vdt = datetime.strptime(VDT_STR, '%Y%m%dT%H%M')
 
     # Cubelists to add cubes to
-    sat_cubes_now = iris.cube.CubeList([])
-    sat_cubes_verify = iris.cube.CubeList([])
+    sat_cubes_now = {loc: iris.cube.CubeList([]) for loc in LOC_NAMES}
+    sat_cubes_verify = {loc: iris.cube.CubeList([]) for loc in LOC_NAMES}
 
     # Extract satellite data for 3 timesteps before and steps timesteps
     # after latest satellite time
@@ -122,10 +127,11 @@ def extract_sat_data():
                 continue
 
         # Filename of processed satellite file to be sought/created
-        p_fname = f'{SCRATCH_DIR}/sat_data/ETXY{SAT_NUM}_{sat_dt_str}.nc'
+        p_fnames = [f'{SCRATCH_DIR}/sat_data/{loc}_{sat_dt_str}.nc'
+                    for loc in LOC_NAMES]
 
         # Extract satellite data if not already saved
-        if not os.path.isfile(p_fname):
+        if any(not os.path.isfile(p_fname) for p_fname in p_fnames):
 
             # Load as cube and Regrid onto 2D
             reg_cube = ut.haic_equi_image(r_fname)
@@ -135,47 +141,66 @@ def extract_sat_data():
                     return False, False
                 continue
 
-            # Filter cube to only include relevant data
-            reg_cube = filter_cube(reg_cube, p_fname)
+            # Filter cube to only include only data for each location
+            for loc_name, loc_extent, p_fname in zip(LOC_NAMES, LOC_EXTENTS, 
+                                                     p_fnames):
+                loc_reg_cube = copy.deepcopy(reg_cube)
+                loc_reg_cube = filter_cube(loc_reg_cube, p_fname, loc_extent)
 
-        # Load regridded data and append to list
-        reg_cube = iris.load_cube(p_fname)
+        # Loop through locations again
+        for loc, p_fname in zip(LOC_NAMES, p_fnames):
 
-        # Append to appropriate cubelist
-        if step <= 0:
-            sat_cubes_now.append(reg_cube)
-        else:
-            sat_cubes_verify.append(reg_cube)
+            # Load regridded data and append to list
+            reg_cube = iris.load_cube(p_fname)
 
-    # Return False if no cubes to create nowcast or verify
-    if len(sat_cubes_now) == 0 or len(sat_cubes_verify) == 0:
-        print(f'Cannot make nowcast for {vdt} - empty cube')
-        return False, False
+            # Append to appropriate cubelist
+            if step <= 0:
+                sat_cubes_now[loc].append(reg_cube)
+            else:
+                sat_cubes_verify[loc].append(reg_cube)
 
-    # Merge cubes to create single cube for nowcast and verification
-    try:
-        sat_cube_now = sat_cubes_now.merge_cube()
-        sat_cube_verify = sat_cubes_verify.merge_cube()
-    except:
-        print('Could not merge cubes', vdt)
-        return False, False
+    # Loop through locations again to merge cubes
+    merged_cubes_now = {}
+    merged_cubes_verify = {}
+    for loc in LOC_NAMES:
 
-    return sat_cube_now, sat_cube_verify
+        # Return False if no cubes to create nowcast or verify
+        if any([len(sat_cubes_now[loc]) == 0, 
+                len(sat_cubes_verify[loc]) == 0]):
+            print(f'Cannot make nowcast for {vdt} {loc} - empty cube')
+            merged_cubes_now[loc] = False
+            merged_cubes_verify[loc] = False
+            continue
+
+        # Merge cubes to create single cube for nowcast and verification
+        try:
+            sat_cube_now = sat_cubes_now[loc].merge_cube()
+            sat_cube_verify = sat_cubes_verify[loc].merge_cube()
+            merged_cubes_now[loc] = sat_cube_now
+            merged_cubes_verify[loc] = sat_cube_verify
+        except:
+            print('Could not merge cubes', vdt, loc)
+            merged_cubes_now[loc] = False
+            merged_cubes_verify[loc] = False
+
+    return merged_cubes_now, merged_cubes_verify
 
 
-def filter_cube(reg_cube, p_fname):
+def filter_cube(reg_cube, p_fname, loc_extent):
     """
     Filters regridded satellite cube to only include relevant data and 
     saves out.
 
     Args:
         reg_cube (iris.cube.Cube): Cube with regridded satellite data
+        p_fname (str): Filename to save processed data
+        loc_extent (list): List of longitude and latitude extents
     Returns:
         reg_cube (iris.cube.Cube): Cube with filtered regridded data
     """
     # Intersect to local domain
-    lon_extent = tuple(LOC_EXTENTS[:2])
-    lat_extent = tuple(LOC_EXTENTS[2:])
+    lon_extent = tuple(loc_extent[:2])
+    lat_extent = tuple(loc_extent[2:])
     reg_cube = reg_cube.intersection(longitude=lon_extent, latitude=lat_extent)
 
     # Delete attributes to enable merging
@@ -198,7 +223,7 @@ def filter_cube(reg_cube, p_fname):
     return reg_cube
 
 
-def plot_ncasts(ncast_cube, new_plots=False):
+def plot_ncasts(ncast_cube, loc, loc_extent):
     """
     Plots nowcast data and saves iris cubes.
 
@@ -232,20 +257,16 @@ def plot_ncasts(ncast_cube, new_plots=False):
         # Define titles/fnames
         plot_title = (f'Nowcast {TITLE} at {date_plt}, '
                       f'lead time: T+{lead_time}')
-        p_fname = f'{HTML_DIR}/{LOC_NAME}_{N_TYPE}_now_{vf_time_str}.png'
-        s_fname = (f'{HTML_DIR}/{LOC_NAME}_{N_TYPE}_now_shapes_'
-                   f'{vf_time_str}.png')
+        p_fname = f'{HTML_DIR}/{loc}_{N_TYPE}_now_{vf_time_str}.png'
+        s_fname = f'{HTML_DIR}/{loc}_{N_TYPE}_now_shapes_{vf_time_str}.png'
 
-        # Plot nowcast data (if plots not already created and new plots
-        # not required)
-        if new_plots or not os.path.exists(p_fname):
-            plotting.plot(ncast, plot_title, p_fname, N_TYPE, LOC_EXTENTS)
-        # if new_plots or not os.path.exists(s_fname):
-        #     plotting.plot(ncast, plot_title, s_fname, N_TYPE, LOC_EXTENTS,
-        #                   contours=True)
+        # Plot nowcast data
+        plotting.plot(ncast, plot_title, p_fname, N_TYPE, loc_extent)
+        plotting.plot(ncast, plot_title, s_fname, N_TYPE, loc_extent,
+                      contours=True)
 
 
-def plot_sats(sat_cube, new_plots=False):
+def plot_sats(sat_cubes, loc, loc_extent):
     """
     Plots satellite data.
 
@@ -257,10 +278,10 @@ def plot_sats(sat_cube, new_plots=False):
         None
     """
     # Get time units from cube
-    units = sat_cube.coord('time').units
+    units = sat_cubes[loc].coord('time').units
 
     # Draw plots for each valid time
-    for sat_slice in sat_cube.slices(['latitude', 'longitude']):
+    for sat_slice in sat_cubes[loc].slices(['latitude', 'longitude']):
 
         # Get date from cube for plot title
         date = units.num2date(sat_slice.coord('time').points[0])
@@ -270,16 +291,13 @@ def plot_sats(sat_cube, new_plots=False):
 
         # Define plot title, and image and cube file names
         plot_title = f'Satellite {TITLE} at {date_plt}'
-        p_fname = f'{HTML_DIR}/{LOC_NAME}_{N_TYPE}_sat_{date_str}.png'
-        s_fname = f'{HTML_DIR}/{LOC_NAME}_{N_TYPE}_sat_shapes_{date_str}.png'
+        p_fname = f'{HTML_DIR}/{loc}_{N_TYPE}_sat_{date_str}.png'
+        s_fname = f'{HTML_DIR}/{loc}_{N_TYPE}_sat_shapes_{date_str}.png'
 
-        # Plot satellite data (if plots not already created and new
-        # plots not required)
-        if new_plots or not os.path.exists(p_fname):
-            plotting.plot(sat_slice, plot_title, p_fname, N_TYPE, LOC_EXTENTS)
-        if new_plots or not os.path.exists(s_fname):
-            plotting.plot(sat_slice, plot_title, s_fname, N_TYPE, LOC_EXTENTS,
-                          contours=True)
+        # Plot satellite data
+        plotting.plot(sat_slice, plot_title, p_fname, N_TYPE, loc_extent)
+        plotting.plot(sat_slice, plot_title, s_fname, N_TYPE, loc_extent,
+                      contours=True)
 
 
 def run_ncast(sat_cube):
@@ -330,12 +348,11 @@ def run_ncast(sat_cube):
 
     # Save nowcast cube
     t_0_vdt = time_units.num2date(sat_time)
-    t_0_vdt_str = t_0_vdt.strftime('%Y%m%d%H%M')
 
     return ncasts
 
 
-def verify_plot(sat_cube, ncast_cube):
+def verify_csv(sat_cubes, loc, ncast_cube):
     """
     Verifies nowcast probabilities against satellite probabilities.
 
@@ -356,7 +373,7 @@ def verify_plot(sat_cube, ncast_cube):
     scores = {'Lead': [], 'Threshold': [], 'Scale': [], 'FSS': []}
 
     # Slices of cubes to loop over
-    sat_slices = sat_cube.slices(['latitude', 'longitude'])
+    sat_slices = sat_cubes[loc].slices(['latitude', 'longitude'])
     now_slices = ncast_cube.slices(['latitude', 'longitude'])
 
     # Loop through all times in cubes
@@ -389,8 +406,8 @@ def verify_plot(sat_cube, ncast_cube):
 
     # Save scores to CSV file
     scores_df = pd.DataFrame(scores)
-    scores_fname = (f'{SCRATCH_DIR}/verification/{SAT_NUM}_'
-                    f'{f_ref_time.strftime("%Y%m%d%H%M")}_scores.csv')
+    dt_str = f_ref_time.strftime('%Y%m%d%H%M')
+    scores_fname = f'{SCRATCH_DIR}/verification/{loc}_{dt_str}_scores.csv'
     scores_df.to_csv(scores_fname, index=False)
 
 
