@@ -29,6 +29,13 @@ def main():
     Returns:
         None
     """
+    # Delete any empty netCDF files
+    for fname in os.listdir(f'{SCRATCH_DIR}/sat_files'):
+        file_path = os.path.join(SCRATCH_DIR, 'sat_files', fname)
+        if os.path.getsize(file_path) == 0:
+            os.remove(file_path)
+            print(f'Deleted empty file: {fname}')
+
     # Convert valid time to datetime object
     vdt = datetime.strptime(VDT_STR, '%Y%m%dT%H%M')
 
