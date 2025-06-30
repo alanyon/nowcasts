@@ -29,6 +29,7 @@ def main():
     Returns:
         None
     """
+    print(VDT_STR)
     # Delete any empty netCDF files
     for fname in os.listdir(f'{SCRATCH_DIR}/sat_files'):
         file_path = os.path.join(SCRATCH_DIR, 'sat_files', fname)
