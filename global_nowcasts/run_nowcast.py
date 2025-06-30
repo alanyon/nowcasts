@@ -120,7 +120,7 @@ def extract_sat_data():
             # Can't create nowcast without 3 sat files
             if step <= 0:
                 print(f'No satellite data for {vdt} - cannot create nowcast')
-                return False, False
+                return sat_cubes_now, sat_cubes_verify
             
             # Otherwise, move to next iteration
             else:
@@ -138,12 +138,11 @@ def extract_sat_data():
 
             if not reg_cube:
                 if step <= 0:
-                    return False, False
+                    return sat_cubes_now, sat_cubes_verify
                 continue
 
             # Filter cube to only include only data for each location
-            for loc_name, loc_extent, p_fname in zip(LOC_NAMES, LOC_EXTENTS, 
-                                                     p_fnames):
+            for loc_extent, p_fname in zip(LOC_EXTENTS, p_fnames):
                 loc_reg_cube = copy.deepcopy(reg_cube)
                 loc_reg_cube = filter_cube(loc_reg_cube, p_fname, loc_extent)
 
