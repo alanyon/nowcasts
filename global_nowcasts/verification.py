@@ -22,7 +22,7 @@ sns.set_style('darkgrid')
 # Constants
 DATADIR = '/data/scratch/andre.lanyon/HAIC'
 START = '202501310000'
-END = '202502031800'
+END = '202502090900'
 THRESHOLDS = [20, 40, 60, 80]
 LOC_NAMES = ['se_asia', 'africa', 'europe', 'south_america']
 
@@ -39,7 +39,7 @@ def main():
     # Get dates and times between start and end at 6-hourly intervals
     vdts = rrule(HOURLY, dtstart=datetime.strptime(START, '%Y%m%d%H%M'),
                  until=datetime.strptime(END, '%Y%m%d%H%M'),
-                 interval=6)
+                 interval=3)
     
     for loc in LOC_NAMES:
 
@@ -149,7 +149,7 @@ def main():
         ax.set_yticklabels(heatmap_data.index, rotation=0)
         
         # Save and close plot
-        fname = f'{DATADIR}/plots/{loc}_{START}_{END}__heatmap.png'
+        fname = f'{DATADIR}/plots/{loc}_{START}_{END}_heatmap.png'
         fig.savefig(fname)
         plt.close()
 

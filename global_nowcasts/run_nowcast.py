@@ -120,6 +120,8 @@ def extract_sat_data():
             # Can't create nowcast without 3 sat files
             if step <= 0:
                 print(f'No satellite data for {vdt} - cannot create nowcast')
+                sat_cubes_now = {loc: False for loc in LOC_NAMES}
+                sat_cubes_verify = {loc: False for loc in LOC_NAMES}
                 return sat_cubes_now, sat_cubes_verify
             
             # Otherwise, move to next iteration
