@@ -75,10 +75,10 @@ def main():
         # plot_sats(sat_cubes_verify, loc, loc_extent)
 
         # Run nowcast using Lukas-Kanade optical flow methods
-        ncast_cube = run_ncast(sat_cubes_now[loc])
+        ncast_cube, counts = run_ncast(sat_cubes_now[loc])
 
         # Verify nowcasts against satellite imagery
-        verify_csv(sat_cubes_verify, loc, ncast_cube)
+        verify_csv(sat_cubes_verify, loc, ncast_cube, counts, loc_extent)
 
         # # Plot nowcasts and save iris cubes
         # plot_ncasts(ncast_cube, loc, loc_extent)
@@ -313,6 +313,16 @@ def run_ncast(sat_cube):
     # Get relevant satellite data from cube
     sats = sat_cube.data
 
+    # Latest satellite data
+    latest_sat = sats[-1]
+
+    # Count occurences of more than each threshold in latest sat data
+    counts = {}
+    for i, thr in enumerate(THRESHOLDS[0]):
+        counts[THRESHOLDS[1][i]] = np.count_nonzero(latest_sat >= thr)
+
+    print('1', counts)
+
     # Calculate motion field
     oflow_method = motion.get_method('LK')
     motion_field = oflow_method(sats[-3:, :, :])
@@ -347,13 +357,10 @@ def run_ncast(sat_cube):
     )
     ncasts.add_aux_coord(fr_coord)
 
-    # Save nowcast cube
-    t_0_vdt = time_units.num2date(sat_time)
-
-    return ncasts
+    return ncasts, counts
 
 
-def verify_csv(sat_cubes, loc, ncast_cube):
+def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0, loc_extent):
     """
     Verifies nowcast probabilities against satellite probabilities.
 
@@ -363,6 +370,8 @@ def verify_csv(sat_cubes, loc, ncast_cube):
     Returns:
         None
     """
+    print(sat_cubes[loc])
+
     # Use fractions skill score method
     fss = verification.get_method('FSS')
 
@@ -371,18 +380,34 @@ def verify_csv(sat_cubes, loc, ncast_cube):
 
     # To collect verification scores in (use percentage in labels for
     # HAIC)
-    scores = {'Lead': [], 'Threshold': [], 'Scale': [], 'FSS': []}
+    scores = {'Lead': [], 'Threshold': [], 'Scale': [], 'FSS': [],
+              'Counts Diff 20': [], 'Counts Diff 40': [],
+              'Counts Diff 60': [], 'Counts Diff 80': []}
 
     # Slices of cubes to loop over
     sat_slices = sat_cubes[loc].slices(['latitude', 'longitude'])
     now_slices = ncast_cube.slices(['latitude', 'longitude'])
 
     # Loop through all times in cubes
-    for t_s_cube, t_n_cube in itertools.product(sat_slices, now_slices):
+    for t_s_cube, t_n_cube in zip(sat_slices, now_slices):
 
         # Get valid time from cubes
         sat_time = t_s_cube.coord('time').points[0]
         now_time = t_n_cube.coord('time').points[0]
+
+        # Count occurences of more than each threshold in sat data
+        latest_sat = t_s_cube.data
+        counts = {}
+        for i, thr in enumerate(THRESHOLDS[0]):
+            counts[THRESHOLDS[1][i]] = np.count_nonzero(latest_sat >= thr)
+
+        # Get difference between counts and counts_t_0
+        counts_diff = {thr: counts[thr] - counts_t_0[thr]
+                       for thr in counts_t_0.keys()}
+        
+        # Add counts difference to scores dictionary
+        for thr in THRESHOLDS[1]:
+            scores[f'Counts Diff {thr}'].append(counts_diff[thr])
 
         # Move to next iteration if times do not match
         if sat_time != now_time:

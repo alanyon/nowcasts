@@ -22,14 +22,15 @@ sns.set_style('darkgrid')
 # Constants
 DATADIR = '/data/scratch/andre.lanyon/HAIC'
 START = '202501310000'
-END = '202502090900'
+END = '202506301800'
 THRESHOLDS = [20, 40, 60, 80]
 LOC_NAMES = ['se_asia', 'africa', 'europe', 'south_america']
+MIDDAY_TIMES = ['20Z', '13Z', '12Z', '08Z']
 
 
 def main():
     """
-    Collects data from CSV files, verifies against satellite data.
+    Collects data from CSV files, verifies against satellite data
 
     Args:
         None
@@ -41,7 +42,7 @@ def main():
                  until=datetime.strptime(END, '%Y%m%d%H%M'),
                  interval=3)
     
-    for loc in LOC_NAMES:
+    for loc, midday_time in zip(LOC_NAMES, MIDDAY_TIMES):
 
         # Empty dataframe to hold all data
         all_df = pd.DataFrame()
@@ -57,104 +58,163 @@ def main():
                 continue
             vdt_df = pd.read_csv(fname)
 
+            # Add hour of nowcast initiation to dataframe
+            vdt_df['Run Time'] = vdt.strftime('%HZ')
+
             # Add to large dataframe
             all_df = pd.concat([all_df, vdt_df])
         
         # Reset index
         all_df = all_df.reset_index(drop=True)
 
-        # Create figure and axes
-        fig, axs = plt.subplots(2, 2, figsize=(18, 10))
+        # Make some plots
+        for var in ['Scale', 'Run Time']:
+            four_plot(all_df, loc, var)
+            summary_plot(all_df, loc, var)
+            heatmap_plot(all_df, loc, var, midday_time)
 
-        # Create plot for each threshold
-        for ind, (ax, thr) in enumerate(zip(axs.flatten(), THRESHOLDS)):
-
-            # Get all data for this threshold
-            thr_df = all_df[all_df['Threshold'] == thr]
-
-            # Make plot
-            sns.lineplot(data=thr_df, x='Lead', y='FSS', hue='Scale', 
-                         style='Scale', markers=True, dashes=False, ax=ax)
-
-            if ind == 0:
-                handles, labels = ax.get_legend_handles_labels()
-            
-            # Supress legend
-            ax.get_legend().remove()
-
-            # Add title
-            ax.set_title(f'Threshold: {thr}%', weight='bold', fontsize=16)
-
-            # Ensure y axes range from 0 to 1
-            ax.set_ylim(0, 1)
-
-            # Set format of axes labels
-            ax.set_xlabel('Lead time (minutes)', weight='bold', fontsize=14)
-            ax.set_ylabel('FSS', weight='bold', fontsize=14)
-
-            # Set x ticks and labels to be every 30 minutes
-            lead_ticks = sorted(thr_df['Lead'].unique())
-            ax.set_xticks(lead_ticks)
-
-        # Put legend outside of figure
-        fig.tight_layout()
-        fig.subplots_adjust(right=0.88)
-        fig.legend(handles, labels, loc='upper right', title='Scale', 
-                   fontsize=18, title_fontproperties={'weight': 'bold', 'size': 20})
-
-        # Save and close plot
-        fname = f'{DATADIR}/plots/{loc}_{START}_{END}_subplots.png'
-        fig.savefig(fname)
-        plt.close()
-
-        # Create the figure
-        fig, ax = plt.subplots(figsize=(12, 6))
-
-        # Plot all in one
-        sns.scatterplot(data=all_df, x='Lead', y='FSS', hue='Scale', 
-                    style='Threshold',
-                    ax=ax)
-
-        # Set x ticks and labels to be every 30 minutes
-        lead_ticks = sorted(all_df['Lead'].unique())
-        ax.set_xticks(lead_ticks)
-
-        # Labels and title
-        ax.set_xlabel("Lead Time (minutes)")
-        ax.set_ylabel("FSS")
-
-        # Improve legend
-        ax.legend(title="Scale / Threshold", loc='best', fontsize='small')
-
-        # Save and close plot
-        fname = f'{DATADIR}/plots/{loc}_{START}_{END}_all_plot.png'
-        fig.savefig(fname)
-        plt.close()
-
-
-        # Create the figure
-        fig, ax = plt.subplots(figsize=(16, 6))
-
-        # Example: aggregate to mean FSS per Lead-Scale-Threshold
-        heat_df = all_df.groupby(['Lead', 'Scale'])['FSS'].mean().reset_index()
-
-        # Pivot for heatmap: rows = Lead, cols = Scale, values = mean FSS
-        heatmap_data = heat_df.pivot(index='Scale', columns='Lead', values='FSS')
-
-        # Plot heatmap
-        sns.heatmap(heatmap_data, annot=True, fmt=".2f", cmap="coolwarm", 
-                    center=0.5, cbar_kws={'label': 'Mean FSS'}, ax=ax)
-
-        # Rotate y-axis labels
-        ax.set_yticklabels(heatmap_data.index, rotation=0)
-        
-        # Save and close plot
-        fname = f'{DATADIR}/plots/{loc}_{START}_{END}_heatmap.png'
-        fig.savefig(fname)
-        plt.close()
+            # Separate heatmaps by threshold
+            for thr in THRESHOLDS:
+                heatmap_plot(all_df, loc, var, midday_time, threshold=thr)
 
         print('Finished')
 
+def four_plot(all_df, loc, leg_var):
+    """
+    Create four plots in the same figure for the given dataframe and 
+    location.
+
+    Args:
+        df (pd.DataFrame): Dataframe containing verification scores
+        loc (str): Location name for saving plots
+        leg_var (str): Variable to use for legend (Scale or Run Time)
+    Returns:
+        None
+    """
+    # Create figure and axes
+    fig, axs = plt.subplots(2, 2, figsize=(18, 10))
+
+    # Create plot for each threshold
+    for ind, (ax, thr) in enumerate(zip(axs.flatten(), THRESHOLDS)):
+
+        # Get all data for this threshold
+        thr_df = all_df[all_df['Threshold'] == thr]
+
+        # Make plot
+        sns.lineplot(data=thr_df, x='Lead', y='FSS', hue=leg_var,
+                     markers=True, ax=ax)
+
+        if ind == 0:
+            handles, labels = ax.get_legend_handles_labels()
+        
+        # Supress legend
+        ax.get_legend().remove()
+
+        # Add title
+        ax.set_title(f'Threshold: {thr}%', weight='bold', fontsize=16)
+
+        # Ensure y axes range from 0 to 1
+        ax.set_ylim(0, 1)
+
+        # Set format of axes labels
+        ax.set_xlabel('Lead time (minutes)', weight='bold', fontsize=14)
+        ax.set_ylabel('FSS', weight='bold', fontsize=14)
+
+        # Set x ticks and labels to be every 30 minutes
+        lead_ticks = sorted(thr_df['Lead'].unique())
+        ax.set_xticks(lead_ticks)
+
+    # Put legend outside of figure
+    fig.tight_layout()
+    fig.subplots_adjust(right=0.88)
+    fig.legend(handles, labels, loc='upper right', title=leg_var, 
+                fontsize=18, title_fontproperties={'weight': 'bold', 'size': 20})
+
+    # Save and close plot
+    var_str = leg_var.lower().replace(' ', '_')
+    fname = f'{DATADIR}/plots/{loc}_{START}_{END}_subplots_{var_str}.png'
+    fig.savefig(fname)
+    plt.close()
+
+
+def heatmap_plot(all_df, loc, var, midday_time, threshold=None):
+    """
+    Create a heatmap plot for the given dataframe and location.
+
+    Args:
+        all_df (pd.DataFrame): Dataframe containing verification scores
+        loc (str): Location name for saving plots
+        var (str): Variable to use for heatmap (Scale or Run Time)
+        midday_time (str): Approximate time of midday for the location
+    Returns:
+        None
+    """
+    # Create the figure
+    fig, ax = plt.subplots(figsize=(16, 6))
+
+    # Filter dataframe by threshold if provided
+    if threshold is not None:
+        all_df = all_df[all_df['Threshold'] == threshold]
+
+    # Example: aggregate to mean FSS per Lead-Scale-Threshold
+    heat_df = all_df.groupby(['Lead', var])['FSS'].mean().reset_index()
+
+    # Pivot for heatmap: rows = Lead, cols = Scale, values = mean FSS
+    heatmap_data = heat_df.pivot(index=var, columns='Lead', values='FSS')
+
+    # Plot heatmap
+    sns.heatmap(heatmap_data, annot=True, fmt=".2f", cmap="coolwarm", 
+                center=0.5, cbar_kws={'label': 'Mean FSS'}, ax=ax)
+
+    # Rotate y-axis labels
+    ax.set_yticklabels(heatmap_data.index, rotation=0)
+
+    # Set title with approximate time of midday
+    ax.set_title(f'Approximate Time of Midday: {midday_time}', fontsize=16, 
+                 weight='bold')
+    
+    # Save and close plot
+    var_str = var.lower().replace(' ', '_')
+    if threshold is not None:
+        var_str += f'_thr{threshold}'
+    fname = f'{DATADIR}/plots/{loc}_{START}_{END}_heatmap_{var_str}.png'
+    fig.savefig(fname)
+    plt.close()
+
+
+def summary_plot(all_df, loc, var):
+    """
+    Create a summary plot for all data in one figure.
+
+    Args:
+        all_df (pd.DataFrame): Dataframe containing verification scores
+        loc (str): Location name for saving plots
+        var (str): Variable to use for legend (Scale or Run Time)
+    Returns:
+        None
+    """
+    # Create the figure
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Plot all in one
+    sns.lineplot(data=all_df, x='Lead', y='FSS', hue=var, ax=ax)
+
+    # Set x ticks and labels to be every 30 minutes
+    lead_ticks = sorted(all_df['Lead'].unique())
+    ax.set_xticks(lead_ticks)
+
+    # Labels and title
+    ax.set_xlabel("Lead Time (minutes)")
+    ax.set_ylabel("FSS")
+
+    # Improve legend
+    ax.legend(title=var, loc='best', fontsize='small')
+
+    # Save and close plot
+    var_str = var.lower().replace(' ', '_')
+    fname = f'{DATADIR}/plots/{loc}_{START}_{END}_all_{var_str}.png'
+    fig.savefig(fname)
+    plt.close()
 
 
 if __name__ == "__main__":
