@@ -70,9 +70,9 @@ def main():
             print('Insufficient satellite data for nowcast')
             exit()
 
-        # # Plot satellite data
-        # plot_sats(sat_cubes_now, loc, loc_extent)
-        # plot_sats(sat_cubes_verify, loc, loc_extent)
+        # Plot satellite data
+        plot_sats(sat_cubes_now, loc, loc_extent)
+        plot_sats(sat_cubes_verify, loc, loc_extent)
 
         # Run nowcast using Lukas-Kanade optical flow methods
         ncast_cube, counts = run_ncast(sat_cubes_now[loc])
@@ -80,7 +80,7 @@ def main():
         # Verify nowcasts against satellite imagery
         verify_csv(sat_cubes_verify, loc, ncast_cube, counts, loc_extent)
 
-        # # Plot nowcasts and save iris cubes
+        # Plot nowcasts and save iris cubes
         # plot_ncasts(ncast_cube, loc, loc_extent)
 
 
@@ -381,8 +381,7 @@ def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0, loc_extent):
     # To collect verification scores in (use percentage in labels for
     # HAIC)
     scores = {'Lead': [], 'Threshold': [], 'Scale': [], 'FSS': [],
-              'Counts Diff 20': [], 'Counts Diff 40': [],
-              'Counts Diff 60': [], 'Counts Diff 80': []}
+              'Counts Diff': []}
 
     # Slices of cubes to loop over
     sat_slices = sat_cubes[loc].slices(['latitude', 'longitude'])
@@ -404,10 +403,6 @@ def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0, loc_extent):
         # Get difference between counts and counts_t_0
         counts_diff = {thr: counts[thr] - counts_t_0[thr]
                        for thr in counts_t_0.keys()}
-        
-        # Add counts difference to scores dictionary
-        for thr in THRESHOLDS[1]:
-            scores[f'Counts Diff {thr}'].append(counts_diff[thr])
 
         # Move to next iteration if times do not match
         if sat_time != now_time:
@@ -429,6 +424,7 @@ def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0, loc_extent):
                 scores['Threshold'].append(thr_2)
                 scores['Scale'].append(scale)
                 scores['FSS'].append(score)
+                scores[f'Counts Diff'].append(counts_diff[thr_2])
 
     # Save scores to CSV file
     scores_df = pd.DataFrame(scores)

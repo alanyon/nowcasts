@@ -13,13 +13,13 @@ export MASSDIR=moose:/adhoc/projects/autosatarchive/adhoc/mtg_global_composites
 export ENSDIR=/scratch/alanyon/HAIC/ens_files
 export STEPS=24
 export TIMESTEP=30
-export VDT_STR=20250204T1200
+export VDT_STR=20250131T0000
 
 # Load scitools
 module load scitools
 
 # cd in code directory and run code
 cd ${CODE_DIR}
-python extract_from_mass.py
-# python run_nowcast.py
+# python extract_from_mass.py
+python run_nowcast.py
 # python delete_old_files.py
