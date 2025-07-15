@@ -70,9 +70,9 @@ def main():
             print('Insufficient satellite data for nowcast')
             exit()
 
-        # Plot satellite data
-        plot_sats(sat_cubes_now, loc, loc_extent)
-        plot_sats(sat_cubes_verify, loc, loc_extent)
+        # # Plot satellite data
+        # plot_sats(sat_cubes_now, loc, loc_extent)
+        # plot_sats(sat_cubes_verify, loc, loc_extent)
 
         # Run nowcast using Lukas-Kanade optical flow methods
         ncast_cube, counts = run_ncast(sat_cubes_now[loc])
