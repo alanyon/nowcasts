@@ -22,7 +22,7 @@ sns.set_style('darkgrid')
 # Constants
 DATADIR = '/data/scratch/andre.lanyon/HAIC'
 START = '202501310000'
-END = '202506301800'
+END = '202502042100'
 THRESHOLDS = [20, 40, 60, 80]
 LOC_NAMES = ['se_asia', 'africa', 'europe', 'south_america']
 MIDDAY_TIMES = ['20Z', '13Z', '12Z', '08Z']

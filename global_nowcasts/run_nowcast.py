@@ -15,7 +15,6 @@ Functions:
     run_ncast: Creates nowcasts from satellite data.
     verify_csv: Verifies nowcast probs against satellite probs.
 """
-import itertools
 import os
 from datetime import datetime, timedelta
 
@@ -105,7 +104,7 @@ def extract_sat_data():
 
     # Extract satellite data for 3 timesteps before and steps timesteps
     # after latest satellite time
-    for step in range(-3, STEPS + 1):
+    for step in range(-2, STEPS + 1):
 
         # Get date of satellite file to use
         sat_dt = vdt + timedelta(minutes=30*step)
@@ -122,7 +121,8 @@ def extract_sat_data():
                 print(f'No satellite data for {vdt} - cannot create nowcast')
                 sat_cubes_now = {loc: False for loc in LOC_NAMES}
                 sat_cubes_verify = {loc: False for loc in LOC_NAMES}
-                return sat_cubes_now, sat_cubes_verify
+                return ({loc: iris.cube.CubeList([]) for loc in LOC_NAMES},
+                        {loc: iris.cube.CubeList([]) for loc in LOC_NAMES})
             
             # Otherwise, move to next iteration
             else:
@@ -140,7 +140,8 @@ def extract_sat_data():
 
             if not reg_cube:
                 if step <= 0:
-                    return sat_cubes_now, sat_cubes_verify
+                    return ({loc: iris.cube.CubeList([]) for loc in LOC_NAMES},
+                            {loc: iris.cube.CubeList([]) for loc in LOC_NAMES})
                 continue
 
             # Filter cube to only include only data for each location
