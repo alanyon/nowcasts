@@ -13,7 +13,7 @@ export MASSDIR=moose:/adhoc/projects/autosatarchive/adhoc/mtg_global_composites
 export ENSDIR=/scratch/alanyon/HAIC/ens_files
 export STEPS=24
 export TIMESTEP=30
-export VDT_STR=20250216T1800
+export VDT_STR=20250321T0600
 
 # Load scitools
 module load scitools

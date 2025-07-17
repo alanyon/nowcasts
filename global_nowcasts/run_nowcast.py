@@ -18,6 +18,7 @@ Functions:
 import os
 from datetime import datetime, timedelta
 
+import itertools
 import pandas as pd
 import iris
 import copy
@@ -77,9 +78,9 @@ def main():
         ncast_cube, counts = run_ncast(sat_cubes_now[loc])
 
         # Verify nowcasts against satellite imagery
-        verify_csv(sat_cubes_verify, loc, ncast_cube, counts, loc_extent)
+        verify_csv(sat_cubes_verify, loc, ncast_cube, counts)
 
-        # Plot nowcasts and save iris cubes
+        # # Plot nowcasts and save iris cubes
         # plot_ncasts(ncast_cube, loc, loc_extent)
 
 
@@ -322,8 +323,6 @@ def run_ncast(sat_cube):
     for i, thr in enumerate(THRESHOLDS[0]):
         counts[THRESHOLDS[1][i]] = np.count_nonzero(latest_sat >= thr)
 
-    print('1', counts)
-
     # Calculate motion field
     oflow_method = motion.get_method('LK')
     motion_field = oflow_method(sats[-3:, :, :])
@@ -361,7 +360,7 @@ def run_ncast(sat_cube):
     return ncasts, counts
 
 
-def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0, loc_extent):
+def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0):
     """
     Verifies nowcast probabilities against satellite probabilities.
 
@@ -371,8 +370,6 @@ def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0, loc_extent):
     Returns:
         None
     """
-    print(sat_cubes[loc])
-
     # Use fractions skill score method
     fss = verification.get_method('FSS')
 
@@ -388,12 +385,17 @@ def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0, loc_extent):
     sat_slices = sat_cubes[loc].slices(['latitude', 'longitude'])
     now_slices = ncast_cube.slices(['latitude', 'longitude'])
 
-    # Loop through all times in cubes
-    for t_s_cube, t_n_cube in zip(sat_slices, now_slices):
+    # Loop through all combinations of times in cubes (can't zip in case
+    # times do not match)
+    for t_s_cube, t_n_cube in itertools.product(sat_slices, now_slices):
 
         # Get valid time from cubes
         sat_time = t_s_cube.coord('time').points[0]
         now_time = t_n_cube.coord('time').points[0]
+
+        # Move to next iteration if times do not match
+        if sat_time != now_time:
+            continue
 
         # Count occurences of more than each threshold in sat data
         latest_sat = t_s_cube.data
@@ -405,10 +407,6 @@ def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0, loc_extent):
         counts_diff = {thr: counts[thr] - counts_t_0[thr]
                        for thr in counts_t_0.keys()}
 
-        # Move to next iteration if times do not match
-        if sat_time != now_time:
-            continue
-        
         # Loop through each threshold
         for scale in SCALES:
             # Get lead time from nowcast cube

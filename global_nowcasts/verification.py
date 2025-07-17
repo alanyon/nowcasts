@@ -15,6 +15,7 @@ from dateutil.rrule import rrule, HOURLY
 from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 
 # Set plotting style
 sns.set_style('darkgrid')
@@ -22,7 +23,7 @@ sns.set_style('darkgrid')
 # Constants
 DATADIR = '/data/scratch/andre.lanyon/HAIC'
 START = '202501310000'
-END = '202502042100'
+END = '202503162100'
 THRESHOLDS = [20, 40, 60, 80]
 LOC_NAMES = ['se_asia', 'africa', 'europe', 'south_america']
 MIDDAY_TIMES = ['20Z', '13Z', '12Z', '08Z']
@@ -63,21 +64,101 @@ def main():
 
             # Add to large dataframe
             all_df = pd.concat([all_df, vdt_df])
-        
+
         # Reset index
         all_df = all_df.reset_index(drop=True)
 
-        # Make some plots
-        for var in ['Scale', 'Run Time']:
-            four_plot(all_df, loc, var)
-            summary_plot(all_df, loc, var)
-            heatmap_plot(all_df, loc, var, midday_time)
+        # Remove rows with NaN in 'FSS'
+        all_df = all_df[~all_df['FSS'].isna()]
 
-            # Separate heatmaps by threshold
-            for thr in THRESHOLDS:
-                heatmap_plot(all_df, loc, var, midday_time, threshold=thr)
+        # # Make some plots
+        # for var in ['Scale', 'Run Time']:
+        #     four_plot(all_df, loc, var)
+        #     summary_plot(all_df, loc, var)
+        #     heatmap_plot(all_df, loc, var, midday_time)
+
+        #     # Separate heatmaps by threshold
+        #     for thr in THRESHOLDS:
+        #         heatmap_plot(all_df, loc, var, midday_time, threshold=thr)
+
+        # Difference plots
+        for thr in THRESHOLDS:
+            diff_plot(all_df, loc, thr)
+            for lead in [30, 60, 90]:
+                diff_plot(all_df, loc, thr, lead=lead, scale=64)
 
         print('Finished')
+
+
+def diff_plot(all_df, loc, thr, lead=None, scale=None):
+    """
+    Create a difference plot for the specified location, threshold, lead 
+    time, and scale.
+
+    Args:
+        all_df (pd.DataFrame): Dataframe containing verification scores
+        loc (str): Location name for saving plots
+        thr (int): Threshold percentage to filter data
+        lead (int, optional): Lead time in minutes to filter data
+        scale (int, optional): Scale in km to filter data
+    Returns:
+        None
+    """
+    # Get data for the specified threshold
+    thr_df = all_df[all_df['Threshold'] == thr]
+
+    # Subset data based on lead and scale if specified
+    if lead is None and scale is None:
+        scale_df = thr_df
+    else:
+        # Get data for the specified lead time
+        lead_df = thr_df[thr_df['Lead'] == lead]
+        # Get data at the specified scale
+        scale_df = lead_df[lead_df['Scale'] == scale]
+
+    # Create figure
+    fig, ax = plt.subplots(figsize=(12, 10))
+
+    # Plot density using hexbin with log scale for counts
+    hb = ax.hexbin(
+        scale_df['Counts Diff'],
+        scale_df['FSS'],
+        gridsize=40,
+        cmap='Blues',
+        mincnt=1,
+        linewidths=0.5,
+        bins='log'  # Use log scale for counts per bin
+    )
+    cb = fig.colorbar(hb, ax=ax)
+    cb.set_label('Log(Counts per bin)')
+
+    # Overlay regression line only (no scatter points)
+    sns.regplot(
+        data=scale_df,
+        x='Counts Diff',
+        y='FSS',
+        ax=ax,
+        scatter=False,
+        lowess=True,
+        line_kws={'color': 'red', 'lw': 2}
+    )
+
+    ax.set_xlabel('Counts Diff')
+    ax.set_ylabel('FSS')
+    ax.set_title(f'Density of FSS vs Counts Diff (thr={thr}, lead={lead}, scale={scale})')
+
+    # Save and close plot
+    if lead is None and scale is None:
+        lead_str = 'all_leads'
+        scale_str = 'all_scales'
+    else:
+        lead_str = f'lead_{lead}'
+        scale_str = f'scale_{scale}'
+    fname = (f'{DATADIR}/plots/{loc}_{START}_{END}_{lead_str}_{scale_str}_'
+             f'{thr}_diff_plot.png')
+    fig.savefig(fname)
+    plt.close()
+
 
 def four_plot(all_df, loc, leg_var):
     """
