@@ -422,11 +422,11 @@ def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0):
                 # Calculate FSS score
                 score = fss(t_n_cube.data, t_s_cube.data, thr_1, scale)
 
-                # If no occurences in nowcast or obs, set score to 1.0
+                # If no occurences in nowcast or obs, ignore
                 nowcast_hits = np.any(t_n_cube.data >= thr_1)
                 obs_hits = np.any(t_s_cube.data >= thr_1)
                 if not nowcast_hits or not obs_hits:
-                    score = 1.0
+                    continue
 
                 # Add scores to dictionary
                 scores['Lead'].append(lead_time)

@@ -23,7 +23,7 @@ sns.set_style('darkgrid')
 # Constants
 DATADIR = '/data/scratch/andre.lanyon/HAIC'
 START = '202501310000'
-END = '202503162100'
+END = '202502070900'
 THRESHOLDS = [20, 40, 60, 80]
 LOC_NAMES = ['se_asia', 'africa', 'europe', 'south_america']
 MIDDAY_TIMES = ['20Z', '13Z', '12Z', '08Z']
@@ -58,20 +58,7 @@ def main():
                 print(f'No CSV file found for {vdt}')
                 continue
             vdt_df = pd.read_csv(fname)
-
-            # Look for rows with FSS values of zero or NAN AND Counts Diff
-            # values of zero
-            zero_counts = vdt_df['Counts Diff'] == 0
-            zero_nan_fss = vdt_df['FSS'].isna() | (vdt_df['FSS'] == 0)
-            vdt_df_zeros = vdt_df[zero_counts & zero_nan_fss]
-            if not vdt_df_zeros.empty:
-                
-                print(loc, vdt.strftime('%Y%m%d%HZ'))
-                # Print the rows with NaN or zero FSS values and zero Counts Diff
-
-                print(vdt_df_zeros)
-                print('')
-
+            
             # Add hour of nowcast initiation to dataframe
             vdt_df['Run Time'] = vdt.strftime('%HZ')
 
@@ -81,24 +68,24 @@ def main():
         # Reset index
         all_df = all_df.reset_index(drop=True)
 
-        # Remove rows with NaN in 'FSS'
-        all_df = all_df[~all_df['FSS'].isna()]
+        # # Remove rows with NaN in 'FSS'
+        # all_df = all_df[~all_df['FSS'].isna()]
 
-        # # Make some plots
-        # for var in ['Scale', 'Run Time']:
-        #     four_plot(all_df, loc, var)
-        #     summary_plot(all_df, loc, var)
-        #     heatmap_plot(all_df, loc, var, midday_time)
+        # Make some plots
+        for var in ['Scale', 'Run Time']:
+            four_plot(all_df, loc, var)
+            summary_plot(all_df, loc, var)
+            heatmap_plot(all_df, loc, var, midday_time)
 
-        #     # Separate heatmaps by threshold
-        #     for thr in THRESHOLDS:
-        #         heatmap_plot(all_df, loc, var, midday_time, threshold=thr)
+            # Separate heatmaps by threshold
+            for thr in THRESHOLDS:
+                heatmap_plot(all_df, loc, var, midday_time, threshold=thr)
 
-        # # Difference plots
-        # for thr in THRESHOLDS:
-        #     diff_plot(all_df, loc, thr)
-        #     for lead in [30, 60, 90]:
-        #         diff_plot(all_df, loc, thr, lead=lead, scale=64)
+        # Difference plots
+        for thr in THRESHOLDS:
+            diff_plot(all_df, loc, thr)
+            for lead in [60, 120]:
+                diff_plot(all_df, loc, thr, lead=lead, scale=64)
 
         print('Finished')
 
