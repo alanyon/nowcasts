@@ -59,6 +59,19 @@ def main():
                 continue
             vdt_df = pd.read_csv(fname)
 
+            # Look for rows with FSS values of zero or NAN AND Counts Diff
+            # values of zero
+            zero_counts = vdt_df['Counts Diff'] == 0
+            zero_nan_fss = vdt_df['FSS'].isna() | (vdt_df['FSS'] == 0)
+            vdt_df_zeros = vdt_df[zero_counts & zero_nan_fss]
+            if not vdt_df_zeros.empty:
+                
+                print(loc, vdt.strftime('%Y%m%d%HZ'))
+                # Print the rows with NaN or zero FSS values and zero Counts Diff
+
+                print(vdt_df_zeros)
+                print('')
+
             # Add hour of nowcast initiation to dataframe
             vdt_df['Run Time'] = vdt.strftime('%HZ')
 
@@ -81,11 +94,11 @@ def main():
         #     for thr in THRESHOLDS:
         #         heatmap_plot(all_df, loc, var, midday_time, threshold=thr)
 
-        # Difference plots
-        for thr in THRESHOLDS:
-            diff_plot(all_df, loc, thr)
-            for lead in [30, 60, 90]:
-                diff_plot(all_df, loc, thr, lead=lead, scale=64)
+        # # Difference plots
+        # for thr in THRESHOLDS:
+        #     diff_plot(all_df, loc, thr)
+        #     for lead in [30, 60, 90]:
+        #         diff_plot(all_df, loc, thr, lead=lead, scale=64)
 
         print('Finished')
 

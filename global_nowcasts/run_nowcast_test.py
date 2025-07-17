@@ -70,9 +70,9 @@ def main():
             print('Insufficient satellite data for nowcast')
             exit()
 
-        # # Plot satellite data
-        # plot_sats(sat_cubes_now, loc, loc_extent)
-        # plot_sats(sat_cubes_verify, loc, loc_extent)
+        # Plot satellite data
+        plot_sats(sat_cubes_now, loc, loc_extent)
+        plot_sats(sat_cubes_verify, loc, loc_extent)
 
         # Run nowcast using Lukas-Kanade optical flow methods
         ncast_cube, counts = run_ncast(sat_cubes_now[loc])
@@ -80,8 +80,9 @@ def main():
         # Verify nowcasts against satellite imagery
         verify_csv(sat_cubes_verify, loc, ncast_cube, counts)
 
-        # # Plot nowcasts and save iris cubes
-        # plot_ncasts(ncast_cube, loc, loc_extent)
+        # Plot nowcasts and save iris cubes
+        plot_ncasts(ncast_cube, loc, loc_extent)
+        exit()
 
 
 def extract_sat_data():
@@ -112,7 +113,7 @@ def extract_sat_data():
         sat_dt_str = sat_dt.strftime('%Y%m%d%H%M')
 
         # Define raw satellite file to extract
-        r_fname = f'{SCRATCH_DIR}/sat_files/ETXY{SAT_NUM}_{sat_dt_str}.nc'
+        r_fname = f'{SCRATCH_DIR}/sat_files_test/ETXY{SAT_NUM}_{sat_dt_str}.nc'
 
         # Extract from MASS if necessary
         if not os.path.exists(r_fname):
@@ -130,7 +131,7 @@ def extract_sat_data():
                 continue
 
         # Filename of processed satellite file to be sought/created
-        p_fnames = [f'{SCRATCH_DIR}/sat_data/{loc}_{sat_dt_str}.nc'
+        p_fnames = [f'{SCRATCH_DIR}/sat_data_test/{loc}_{sat_dt_str}.nc'
                     for loc in LOC_NAMES]
 
         # Extract satellite data if not already saved
@@ -323,6 +324,9 @@ def run_ncast(sat_cube):
     for i, thr in enumerate(THRESHOLDS[0]):
         counts[THRESHOLDS[1][i]] = np.count_nonzero(latest_sat >= thr)
 
+
+    print('1', counts)
+
     # Calculate motion field
     oflow_method = motion.get_method('LK')
     motion_field = oflow_method(sats[-3:, :, :])
@@ -371,7 +375,7 @@ def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0):
         None
     """
     # Use fractions skill score method
-    fss = verification.get_method('FSS')
+    fss_func = verification.get_method('FSS')
 
     # Get units from nowcast cube
     units = ncast_cube.coord('time').units
@@ -406,6 +410,8 @@ def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0):
         # Get difference between counts and counts_t_0
         counts_diff = {thr: counts[thr] - counts_t_0[thr]
                        for thr in counts_t_0.keys()}
+        # print('2', counts)
+        # print('3', counts_diff)
 
         # Loop through each threshold
         for scale in SCALES:
@@ -418,28 +424,36 @@ def verify_csv(sat_cubes, loc, ncast_cube, counts_t_0):
             # Calculate score for each scale value and add to scores
             # dictionary
             for thr_1, thr_2 in zip(*THRESHOLDS):
-
-                # Calculate FSS score
-                score = fss(t_n_cube.data, t_s_cube.data, thr_1, scale)
-
-                # If no occurences in nowcast or obs, set score to 1.0
+                score = fss_func(t_n_cube.data, t_s_cube.data, thr_1, scale)
                 nowcast_hits = np.any(t_n_cube.data >= thr_1)
                 obs_hits = np.any(t_s_cube.data >= thr_1)
                 if not nowcast_hits or not obs_hits:
                     score = 1.0
+                # Print hits if score is NaN
+                print(score)
+                # if np.isnan(score):
+                #     print('nowcast_hits', nowcast_hits)
+                #     print('obs_hits', obs_hits)
+                #     print('Valid time:', valid_time.strftime('%Y%m%d%H%M'))
+                #     print('Lead time:', lead_time)
+                #     print('Scale:', scale)
+                #     print('Threshold:', thr_2)
+                #     print('')
 
-                # Add scores to dictionary
-                scores['Lead'].append(lead_time)
-                scores['Threshold'].append(thr_2)
-                scores['Scale'].append(scale)
-                scores['FSS'].append(score)
-                scores[f'Counts Diff'].append(counts_diff[thr_2])
+                # if lead_time == 570:
+                #     print('2', counts)
+                #     print('3', counts_diff)
+                # scores['Lead'].append(lead_time)
+                # scores['Threshold'].append(thr_2)
+                # scores['Scale'].append(scale)
+                # scores['FSS'].append(score)
+                # scores[f'Counts Diff'].append(counts_diff[thr_2])
 
-    # Save scores to CSV file
-    scores_df = pd.DataFrame(scores)
-    dt_str = f_ref_time.strftime('%Y%m%d%H%M')
-    scores_fname = f'{SCRATCH_DIR}/verification/{loc}_{dt_str}_scores.csv'
-    scores_df.to_csv(scores_fname, index=False)
+    # # Save scores to CSV file
+    # scores_df = pd.DataFrame(scores)
+    # dt_str = f_ref_time.strftime('%Y%m%d%H%M')
+    # scores_fname = f'{SCRATCH_DIR}/verification/{loc}_{dt_str}_scores.csv'
+    # scores_df.to_csv(scores_fname, index=False)
 
 
 if __name__ == "__main__":

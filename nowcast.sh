@@ -3,7 +3,7 @@
 #SBATCH --mem=4G
 #SBATCH --ntasks=4
 #SBATCH --output=/home/users/andre.lanyon/nowcasts/nowcasts/test.out
-#SBATCH --time=10
+#SBATCH --time=5
 #SBATCH --error=/home/users/andre.lanyon/nowcasts/nowcasts/test.err
 
 CODE_DIR=/home/users/andre.lanyon/nowcasts/nowcasts/global_nowcasts
@@ -13,13 +13,13 @@ export MASSDIR=moose:/adhoc/projects/autosatarchive/adhoc/mtg_global_composites
 export ENSDIR=/scratch/alanyon/HAIC/ens_files
 export STEPS=24
 export TIMESTEP=30
-export VDT_STR=20250321T0600
+export VDT_STR=20250206T0900
 
 # Load scitools
 module load scitools
 
 # cd in code directory and run code
 cd ${CODE_DIR}
-# python extract_from_mass.py
-python run_nowcast.py
+# python extract_from_mass_test.py
+python run_nowcast_test.py
 # python delete_old_files.py
