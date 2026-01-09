@@ -95,48 +95,47 @@ def main():
                  - count_empty)/len(list(vdts))*100)
         print('')
 
+        # Make some plots
+        for var in ['Scale', 'Run Time']:
+            four_plot(all_df, loc, var)
+            summary_plot(all_df, loc, var)
+            heatmap_plot(all_df, loc, var, midday_time)
 
-        # # Make some plots
-        # for var in ['Scale', 'Run Time']:
-        #     four_plot(all_df, loc, var)
-        #     summary_plot(all_df, loc, var)
-        #     heatmap_plot(all_df, loc, var, midday_time)
+            # Separate heatmaps by threshold
+            for thr in THRESHOLDS:
+                heatmap_plot(all_df, loc, var, midday_time, threshold=thr)
 
-        #     # Separate heatmaps by threshold
-        #     for thr in THRESHOLDS:
-        #         heatmap_plot(all_df, loc, var, midday_time, threshold=thr)
+        # Difference plots
+        diff_plot(all_df, loc, 'all')
+        for thr in THRESHOLDS:
+            diff_plot(all_df, loc, thr)
+            for lead in [30, 60, 120]:
+                for scale in [4, 16, 64]:
+                    diff_plot(all_df, loc, thr, lead=lead, scale=scale)
 
-        # # Difference plots
-        # diff_plot(all_df, loc, 'all')
-        # for thr in THRESHOLDS:
-        #     diff_plot(all_df, loc, thr)
-        #     for lead in [30, 60, 120]:
-        #         for scale in [4, 16, 64]:
-        #             diff_plot(all_df, loc, thr, lead=lead, scale=scale)
+        # Add location column for big df
+        all_df['Domain'] = LOC_NAMES[loc]
 
-        # # Add location column for big df
-        # all_df['Domain'] = LOC_NAMES[loc]
+        # Add to big df
+        big_df = pd.concat([big_df, all_df])
 
-        # # Add to big df
-        # big_df = pd.concat([big_df, all_df])
+    # Pickle big df
+    big_df = big_df.reset_index(drop=True)
+    p_name = f'{DATADIR}/verification/all_locs_{START}_{END}_scores.pkl'
+    big_df.to_pickle(p_name)
 
-    # # Pickle big df
-    # big_df = big_df.reset_index(drop=True)
-    # p_name = f'{DATADIR}/verification/all_locs_{START}_{END}_scores.pkl'
-    # big_df.to_pickle(p_name)
+    Unpickle big_df
+    big_df = pd.read_pickle(p_name)
 
-    # Unpickle big_df
-    # big_df = pd.read_pickle(p_name)
-
-    # # Make some overall plots
-    # four_plot(big_df, 'all', 'Scale')
-    # four_plot(big_df, 'all', 'Domain')
-    # four_plot(big_df, 'all', 'Run Time')
-    # for thr in THRESHOLDS:
-    #     for lead in [30, 60, 120]:
-    #         for scale in [4, 16, 64]:
-    #             diff_plot(big_df, 'all', thr, lead=lead, scale=scale)
-    # diff_sub_plots(big_df)
+    # Make some overall plots
+    four_plot(big_df, 'all', 'Scale')
+    four_plot(big_df, 'all', 'Domain')
+    four_plot(big_df, 'all', 'Run Time')
+    for thr in THRESHOLDS:
+        for lead in [30, 60, 120]:
+            for scale in [4, 16, 64]:
+                diff_plot(big_df, 'all', thr, lead=lead, scale=scale)
+    diff_sub_plots(big_df)
 
     print('Finished')
 
