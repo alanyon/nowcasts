@@ -23,9 +23,10 @@ sns.set_style('darkgrid')
 # Constants
 DATADIR = '/data/scratch/andre.lanyon/HAIC'
 START = '202501310000'
-END = '202502070900'
+END = '202507312100'
 THRESHOLDS = [20, 40, 60, 80]
-LOC_NAMES = ['se_asia', 'africa', 'europe', 'south_america']
+LOC_NAMES = {'se_asia': 'Southeast Asia', 'africa': 'Africa', 
+             'europe': 'Europe', 'south_america': 'South America'}
 MIDDAY_TIMES = ['20Z', '13Z', '12Z', '08Z']
 
 
@@ -42,12 +43,19 @@ def main():
     vdts = rrule(HOURLY, dtstart=datetime.strptime(START, '%Y%m%d%H%M'),
                  until=datetime.strptime(END, '%Y%m%d%H%M'),
                  interval=3)
+    print('Total times', len(list(vdts)))
+    print('')
     
+    # To collect all data in big dataframe
+    big_df = pd.DataFrame()
+
+    # Loop through locations
     for loc, midday_time in zip(LOC_NAMES, MIDDAY_TIMES):
 
         # Empty dataframe to hold all data
         all_df = pd.DataFrame()
 
+        count_missing, count_empty = 0, 0
         # Loop through each valid time
         for vdt in vdts:
 
@@ -55,12 +63,19 @@ def main():
             fname = (f'{DATADIR}/'
                 f'verification/{loc}_{vdt.strftime("%Y%m%d%H%M")}_scores.csv')
             if not os.path.exists(fname):
-                print(f'No CSV file found for {vdt}')
+                # print(f'No CSV file found for {vdt}')
+                count_missing += 1
                 continue
             vdt_df = pd.read_csv(fname)
             
             # Add hour of nowcast initiation to dataframe
             vdt_df['Run Time'] = vdt.strftime('%HZ')
+
+            # Move on if df is empty
+            if vdt_df.empty:
+                # print(f'No data for {vdt}')
+                count_empty += 1
+                continue
 
             # Add to large dataframe
             all_df = pd.concat([all_df, vdt_df])
@@ -68,26 +83,62 @@ def main():
         # Reset index
         all_df = all_df.reset_index(drop=True)
 
-        # # Remove rows with NaN in 'FSS'
-        # all_df = all_df[~all_df['FSS'].isna()]
+        print(LOC_NAMES[loc])
+        print('Missing files', count_missing)
+        print(f'Percent missing', count_missing/len(list(vdts))*100)
+        print('Empty files', count_empty)
+        print(f'Percent empty', count_empty/len(list(vdts))*100)
+        print('Number of nowcasts generated', 
+              len(list(vdts)) - count_missing - count_empty)
+        print('Percent of nowcasts with data', 
+                (len(list(vdts)) - count_missing 
+                 - count_empty)/len(list(vdts))*100)
+        print('')
 
-        # Make some plots
-        for var in ['Scale', 'Run Time']:
-            four_plot(all_df, loc, var)
-            summary_plot(all_df, loc, var)
-            heatmap_plot(all_df, loc, var, midday_time)
 
-            # Separate heatmaps by threshold
-            for thr in THRESHOLDS:
-                heatmap_plot(all_df, loc, var, midday_time, threshold=thr)
+        # # Make some plots
+        # for var in ['Scale', 'Run Time']:
+        #     four_plot(all_df, loc, var)
+        #     summary_plot(all_df, loc, var)
+        #     heatmap_plot(all_df, loc, var, midday_time)
 
-        # Difference plots
-        for thr in THRESHOLDS:
-            diff_plot(all_df, loc, thr)
-            for lead in [60, 120]:
-                diff_plot(all_df, loc, thr, lead=lead, scale=64)
+        #     # Separate heatmaps by threshold
+        #     for thr in THRESHOLDS:
+        #         heatmap_plot(all_df, loc, var, midday_time, threshold=thr)
 
-        print('Finished')
+        # # Difference plots
+        # diff_plot(all_df, loc, 'all')
+        # for thr in THRESHOLDS:
+        #     diff_plot(all_df, loc, thr)
+        #     for lead in [30, 60, 120]:
+        #         for scale in [4, 16, 64]:
+        #             diff_plot(all_df, loc, thr, lead=lead, scale=scale)
+
+        # # Add location column for big df
+        # all_df['Domain'] = LOC_NAMES[loc]
+
+        # # Add to big df
+        # big_df = pd.concat([big_df, all_df])
+
+    # # Pickle big df
+    # big_df = big_df.reset_index(drop=True)
+    # p_name = f'{DATADIR}/verification/all_locs_{START}_{END}_scores.pkl'
+    # big_df.to_pickle(p_name)
+
+    # Unpickle big_df
+    # big_df = pd.read_pickle(p_name)
+
+    # # Make some overall plots
+    # four_plot(big_df, 'all', 'Scale')
+    # four_plot(big_df, 'all', 'Domain')
+    # four_plot(big_df, 'all', 'Run Time')
+    # for thr in THRESHOLDS:
+    #     for lead in [30, 60, 120]:
+    #         for scale in [4, 16, 64]:
+    #             diff_plot(big_df, 'all', thr, lead=lead, scale=scale)
+    # diff_sub_plots(big_df)
+
+    print('Finished')
 
 
 def diff_plot(all_df, loc, thr, lead=None, scale=None):
@@ -105,7 +156,10 @@ def diff_plot(all_df, loc, thr, lead=None, scale=None):
         None
     """
     # Get data for the specified threshold
-    thr_df = all_df[all_df['Threshold'] == thr]
+    if thr == 'all':
+        thr_df = all_df
+    else:
+        thr_df = all_df[all_df['Threshold'] == thr]
 
     # Subset data based on lead and scale if specified
     if lead is None and scale is None:
@@ -145,7 +199,8 @@ def diff_plot(all_df, loc, thr, lead=None, scale=None):
 
     ax.set_xlabel('Counts Diff')
     ax.set_ylabel('FSS')
-    ax.set_title(f'Density of FSS vs Counts Diff (thr={thr}, lead={lead}, scale={scale})')
+    ax.set_title(f'Density of FSS vs Counts Diff (thr={thr}, lead={lead}, '
+                 f'scale={scale})')
 
     # Save and close plot
     if lead is None and scale is None:
@@ -156,6 +211,75 @@ def diff_plot(all_df, loc, thr, lead=None, scale=None):
         scale_str = f'scale_{scale}'
     fname = (f'{DATADIR}/plots/{loc}_{START}_{END}_{lead_str}_{scale_str}_'
              f'{thr}_diff_plot.png')
+    fig.savefig(fname)
+    plt.close()
+
+
+def diff_sub_plots(all_df):
+    """
+    Create a difference plot for the specified location, threshold, lead 
+    time, and scale.
+
+    Args:
+        all_df (pd.DataFrame): Dataframe containing verification scores
+        loc (str): Location name for saving plots
+        thr (int): Threshold percentage to filter data
+        lead (int, optional): Lead time in minutes to filter data
+        scale (int, optional): Scale in km to filter data
+    Returns:
+        None
+    """
+    # Get data for 20% threshold
+    thr_df = all_df[all_df['Threshold'] == 20]
+
+    # Get data at 16 scale
+    scale_df = thr_df[thr_df['Scale'] == 16]
+
+    # Create figure
+    fig, axs = plt.subplots(2, 2, figsize=(16, 16))
+
+    # Loop through axs and lead times
+    for ax, lead in zip(axs.flatten(), [30, 60, 90, 120]):
+
+        # Get data for the specified lead time
+        lead_df = scale_df[scale_df['Lead'] == lead]
+
+        # Plot density using hexbin with log scale for counts
+        hb = ax.hexbin(
+            lead_df['Counts Diff'],
+            lead_df['FSS'],
+            gridsize=40,
+            cmap='Blues',
+            mincnt=1,
+            linewidths=0.5  # Use log scale for counts per bin
+        )
+        cb = fig.colorbar(hb, ax=ax)
+        cb.set_label('Log(Counts per bin)')
+
+        # Overlay regression line only (no scatter points)
+        sns.regplot(
+            data=lead_df,
+            x='Counts Diff',
+            y='FSS',
+            ax=ax,
+            scatter=False,
+            lowess=True,
+            line_kws={'color': 'red', 'lw': 2}
+        )
+
+        # Titles/labels
+        ax.set_xlabel('Counts Diff', weight='bold', fontsize=14)
+        ax.set_ylabel('FSS', weight='bold', fontsize=14)
+        ax.set_title(f'Lead Time: {lead}', weight='bold', fontsize=16)
+        cbar = ax.collections[0].colorbar
+        cbar.set_label('Counts per bin', fontsize=14, weight='bold')
+
+        # Limit y-axis to 0-1
+        ax.set_ylim(0, 1)
+
+    # Save and close plot
+    fname = f'{DATADIR}/plots/all_{START}_{END}_16_20_diff_sub_plots.png'
+    fig.tight_layout()
     fig.savefig(fname)
     plt.close()
 
@@ -183,7 +307,7 @@ def four_plot(all_df, loc, leg_var):
 
         # Make plot
         sns.lineplot(data=thr_df, x='Lead', y='FSS', hue=leg_var,
-                     markers=True, ax=ax)
+                     ax=ax)
 
         if ind == 0:
             handles, labels = ax.get_legend_handles_labels()
@@ -197,7 +321,8 @@ def four_plot(all_df, loc, leg_var):
         # Ensure y axes range from 0 to 1
         ax.set_ylim(0, 1)
 
-        # Set format of axes labels
+        # Set format of axes labels, rotating x tick labels
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
         ax.set_xlabel('Lead time (minutes)', weight='bold', fontsize=14)
         ax.set_ylabel('FSS', weight='bold', fontsize=14)
 
@@ -207,7 +332,10 @@ def four_plot(all_df, loc, leg_var):
 
     # Put legend outside of figure
     fig.tight_layout()
-    fig.subplots_adjust(right=0.88)
+    if leg_var =='Scale':
+        fig.subplots_adjust(right=0.9)
+    else:
+        fig.subplots_adjust(right=0.82)
     fig.legend(handles, labels, loc='upper right', title=leg_var, 
                 fontsize=18, title_fontproperties={'weight': 'bold', 'size': 20})
 
@@ -250,10 +378,16 @@ def heatmap_plot(all_df, loc, var, midday_time, threshold=None):
     # Rotate y-axis labels
     ax.set_yticklabels(heatmap_data.index, rotation=0)
 
+    # Increase fontsize of axes and colorbar labels
+    ax.set_xlabel("Lead Time (minutes)", fontsize=14, weight='bold')
+    ax.set_ylabel(var, fontsize=14, weight='bold')
+    cbar = ax.collections[0].colorbar
+    cbar.set_label('Mean FSS', fontsize=14, weight='bold')
+
     # Set title with approximate time of midday
-    ax.set_title(f'Approximate Time of Midday: {midday_time}', fontsize=16, 
-                 weight='bold')
-    
+    title = f'{LOC_NAMES[loc]}: Approximate Time of Midday: {midday_time}'
+    ax.set_title(title, fontsize=16, weight='bold')
+
     # Save and close plot
     var_str = var.lower().replace(' ', '_')
     if threshold is not None:

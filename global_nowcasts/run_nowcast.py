@@ -71,8 +71,8 @@ def main():
             exit()
 
         # # Plot satellite data
-        # plot_sats(sat_cubes_now, loc, loc_extent)
-        # plot_sats(sat_cubes_verify, loc, loc_extent)
+        plot_sats(sat_cubes_now, loc, loc_extent)
+        plot_sats(sat_cubes_verify, loc, loc_extent)
 
         # Run nowcast using Lukas-Kanade optical flow methods
         ncast_cube, counts = run_ncast(sat_cubes_now[loc])
@@ -81,7 +81,7 @@ def main():
         verify_csv(sat_cubes_verify, loc, ncast_cube, counts)
 
         # # Plot nowcasts and save iris cubes
-        # plot_ncasts(ncast_cube, loc, loc_extent)
+        plot_ncasts(ncast_cube, loc, loc_extent)
 
 
 def extract_sat_data():

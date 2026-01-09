@@ -11,15 +11,15 @@ export HTML_DIR=/home/users/andre.lanyon/public_html/HAIC/test
 export SCRATCH_DIR=/data/scratch/andre.lanyon/HAIC
 export MASSDIR=moose:/adhoc/projects/autosatarchive/adhoc/mtg_global_composites
 export ENSDIR=/scratch/alanyon/HAIC/ens_files
-export STEPS=24
+export STEPS=4
 export TIMESTEP=30
-export VDT_STR=20250206T0900
+export VDT_STR=20250504T1200
 
 # Load scitools
 module load scitools
 
 # cd in code directory and run code
 cd ${CODE_DIR}
-# python extract_from_mass_test.py
-python run_nowcast_test.py
+# python extract_from_mass.py
+python run_nowcast.py
 # python delete_old_files.py
