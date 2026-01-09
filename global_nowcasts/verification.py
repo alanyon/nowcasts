@@ -124,7 +124,7 @@ def main():
     p_name = f'{DATADIR}/verification/all_locs_{START}_{END}_scores.pkl'
     big_df.to_pickle(p_name)
 
-    Unpickle big_df
+    # Unpickle big_df
     big_df = pd.read_pickle(p_name)
 
     # Make some overall plots
